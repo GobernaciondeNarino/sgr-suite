@@ -1,0 +1,23 @@
+# Logs
+logs/*.log
+logs/*.log.*
+!logs/.htaccess
+!logs/index.php
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build
+*.map

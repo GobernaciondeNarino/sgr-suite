@@ -1,0 +1,186 @@
+/**
+ * SGR Suite - Admin Styles
+ *
+ * @package SGR_Suite
+ * @since   1.0.0
+ */
+
+.sgr-suite-admin {
+    max-width: 1200px;
+}
+
+.sgr-suite-admin h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1d2327;
+    margin-bottom: 5px;
+}
+
+/* Cards de estadísticas */
+.sgr-admin-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.sgr-admin-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-left: 4px solid #348afb;
+    border-radius: 0;
+    padding: 20px;
+    text-align: center;
+}
+
+.sgr-admin-card-number {
+    font-size: 28px;
+    font-weight: 900;
+    color: #1d2327;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+.sgr-admin-card-label {
+    font-size: 13px;
+    color: #50575e;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-top: 5px;
+}
+
+/* Secciones */
+.sgr-admin-section {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.sgr-admin-section h2 {
+    font-size: 18px;
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f1;
+    color: #1d2327;
+}
+
+/* Barra de progreso */
+.sgr-progress-bar-container {
+    height: 30px;
+    background: #f0f0f1;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid #c3c4c7;
+}
+
+.sgr-progress-bar {
+    height: 100%;
+    background: #348afb;
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 0;
+}
+
+/* Zona de peligro */
+.sgr-danger-zone {
+    border-color: #d63638;
+    border-left: 4px solid #d63638;
+}
+
+.sgr-danger-zone h2 {
+    color: #d63638;
+}
+
+.sgr-btn-danger {
+    background: #d63638 !important;
+    border-color: #d63638 !important;
+    color: #fff !important;
+}
+
+.sgr-btn-danger:hover {
+    background: #b32d2e !important;
+    border-color: #b32d2e !important;
+}
+
+/* Filtros admin */
+.sgr-admin-filters-form {
+    margin: 15px 0;
+}
+
+.sgr-admin-filters-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+/* Log viewer */
+.sgr-log-viewer {
+    background: #1d2327;
+    border-radius: 3px;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.sgr-log-content {
+    color: #c3c4c7;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    padding: 15px;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.sgr-log-error {
+    color: #d63638;
+    font-weight: bold;
+}
+
+.sgr-log-warning {
+    color: #dba617;
+    font-weight: bold;
+}
+
+.sgr-log-info {
+    color: #72aee6;
+}
+
+.sgr-log-debug {
+    color: #8c8f94;
+}
+
+/* Import result */
+.sgr-import-success {
+    background: #edfaef;
+    border: 1px solid #46b450;
+    border-left: 4px solid #46b450;
+    padding: 12px 15px;
+    border-radius: 0;
+}
+
+.sgr-import-error {
+    background: #fcf0f1;
+    border: 1px solid #d63638;
+    border-left: 4px solid #d63638;
+    padding: 12px 15px;
+    border-radius: 0;
+}
+
+/* Responsive */
+@media (max-width: 782px) {
+    .sgr-admin-cards {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .sgr-admin-filters-row {
+        flex-direction: column;
+    }
+}
