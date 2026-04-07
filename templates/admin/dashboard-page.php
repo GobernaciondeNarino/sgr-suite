@@ -10,9 +10,10 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-$plugin   = sgr_suite();
-$stats    = $plugin->database->get_stats();
-$last_imp = $plugin->database->get_last_import_date();
+$plugin      = sgr_suite();
+$stats       = $plugin->database->get_stats();
+$last_imp    = $plugin->database->get_last_import_date();
+$chart_count = $plugin->visualizer->count_charts();
 ?>
 <div class="wrap sgr-suite-admin">
     <h1><?php esc_html_e( 'SGR Suite - Dashboard', 'sgr-suite' ); ?></h1>
@@ -38,6 +39,10 @@ $last_imp = $plugin->database->get_last_import_date();
         <div class="sgr-admin-card">
             <div class="sgr-admin-card-number"><?php echo esc_html( number_format( $stats['totalMetas'], 0, ',', '.' ) ); ?></div>
             <div class="sgr-admin-card-label"><?php esc_html_e( 'Metas Registradas', 'sgr-suite' ); ?></div>
+        </div>
+        <div class="sgr-admin-card">
+            <div class="sgr-admin-card-number"><?php echo esc_html( $chart_count ); ?></div>
+            <div class="sgr-admin-card-label"><?php esc_html_e( 'Gráficos Creados', 'sgr-suite' ); ?></div>
         </div>
     </div>
 
@@ -122,6 +127,10 @@ $last_imp = $plugin->database->get_last_import_date();
                 <tr>
                     <td><code>[regalias_grid_visualizador]</code></td>
                     <td><?php esc_html_e( 'Alias compatible con el visualizador anterior.', 'sgr-suite' ); ?></td>
+                </tr>
+                <tr>
+                    <td><code>[sgr_chart id="X"]</code></td>
+                    <td><?php esc_html_e( 'Muestra un gráfico D3Plus configurado desde el admin. Parámetros opcionales: height, class.', 'sgr-suite' ); ?></td>
                 </tr>
             </tbody>
         </table>

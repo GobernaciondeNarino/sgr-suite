@@ -388,6 +388,192 @@
     font-size: 18px;
 }
 
+/* =============================================
+   CHARTS - Gráficos D3Plus
+   ============================================= */
+
+.sgr-chart-wrapper {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    margin: 20px 0;
+    overflow: hidden;
+}
+
+.sgr-chart-wrapper:fullscreen {
+    background: #fff;
+    padding: 20px;
+}
+
+/* Toolbar */
+.sgr-chart-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: #f8fafc;
+    border-bottom: 2px solid #348afb;
+}
+
+.sgr-chart-title {
+    font-weight: 700;
+    color: #334155;
+    font-size: 16px;
+}
+
+.sgr-chart-toolbar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.sgr-chart-toolbar-btn {
+    background: #fff;
+    border: 1px solid #d1d5db;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    border-radius: 0;
+}
+
+.sgr-chart-toolbar-btn:hover {
+    background: #348afb;
+    color: #fff;
+    border-color: #348afb;
+}
+
+/* Chart Container */
+.sgr-chart-container {
+    min-height: 300px;
+    position: relative;
+}
+
+.sgr-chart-container svg {
+    width: 100% !important;
+}
+
+/* Loading */
+.sgr-chart-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 300px;
+    color: #6b7280;
+}
+
+.sgr-chart-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e5e7eb;
+    border-top-color: #348afb;
+    border-radius: 50%;
+    animation: sgrSpin 0.8s linear infinite;
+    margin-bottom: 15px;
+}
+
+@keyframes sgrSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* Error */
+.sgr-chart-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 200px;
+    text-align: center;
+    color: #991b1b;
+    background: #fef2f2;
+    padding: 30px;
+}
+
+/* Data Modal */
+.sgr-chart-data-modal {
+    position: fixed;
+    z-index: 99999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sgr-chart-data-modal-content {
+    background: #fff;
+    width: 90%;
+    max-width: 800px;
+    max-height: 80vh;
+    border: 2px solid #348afb;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.sgr-chart-data-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.sgr-chart-data-modal-header h3 {
+    margin: 0;
+    color: #334155;
+    font-size: 16px;
+}
+
+.sgr-chart-data-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #6b7280;
+    padding: 0 5px;
+}
+
+.sgr-chart-data-modal-close:hover {
+    color: #1f2937;
+}
+
+.sgr-chart-data-modal-body {
+    overflow: auto;
+    flex: 1;
+}
+
+.sgr-chart-data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sgr-chart-data-table th,
+.sgr-chart-data-table td {
+    padding: 10px 15px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 13px;
+}
+
+.sgr-chart-data-table th {
+    background: #f1f5f9;
+    font-weight: 600;
+    color: #334155;
+    text-transform: uppercase;
+    font-size: 12px;
+    position: sticky;
+    top: 0;
+}
+
+.sgr-chart-data-table tbody tr:hover {
+    background: #f9fafb;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .regalias-grid-stats-bar {
@@ -414,5 +600,15 @@
 
     #regalias-grid-modal-body {
         padding: 15px;
+    }
+
+    .sgr-chart-toolbar {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+
+    .sgr-chart-data-modal-content {
+        width: 98%;
     }
 }

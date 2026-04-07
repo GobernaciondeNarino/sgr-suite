@@ -3,7 +3,7 @@
  * Plugin Name: SGR Suite
  * Plugin URI:  https://github.com/GobernaciondeNarino/sgr-suite
  * Description: Importa, almacena, visualiza y filtra datos de proyectos del Sistema General de Regalías (SGR) de Nariño.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Requires at least: 6.0
  * Requires PHP: 8.1
  * Author:      Gobernación de Nariño
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Constantes del plugin
-define( 'SGR_SUITE_VERSION', '1.0.0' );
+define( 'SGR_SUITE_VERSION', '1.0.1' );
 define( 'SGR_SUITE_FILE', __FILE__ );
 define( 'SGR_SUITE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SGR_SUITE_URL', plugin_dir_url( __FILE__ ) );
@@ -49,6 +49,9 @@ final class SGR_Suite {
 
     /** @var SGR_Suite_Updater */
     public SGR_Suite_Updater $updater;
+
+    /** @var SGR_Suite_Visualizer */
+    public SGR_Suite_Visualizer $visualizer;
 
     /**
      * Obtener instancia singleton.
@@ -80,6 +83,7 @@ final class SGR_Suite {
         require_once SGR_SUITE_PATH . 'includes/class-importer.php';
         require_once SGR_SUITE_PATH . 'includes/class-rest-api.php';
         require_once SGR_SUITE_PATH . 'includes/class-updater.php';
+        require_once SGR_SUITE_PATH . 'includes/class-visualizer.php';
     }
 
     /**
@@ -90,7 +94,8 @@ final class SGR_Suite {
         $this->database = new SGR_Suite_Database( $this->logger );
         $this->importer = new SGR_Suite_Importer( $this->database, $this->logger );
         $this->rest_api = new SGR_Suite_Rest_API( $this->database );
-        $this->updater  = new SGR_Suite_Updater( $this->database, $this->logger );
+        $this->updater    = new SGR_Suite_Updater( $this->database, $this->logger );
+        $this->visualizer = new SGR_Suite_Visualizer( $this->database, $this->logger );
     }
 
     /**
@@ -124,6 +129,10 @@ final class SGR_Suite {
         // Cron
         add_action( 'sgr_suite_scheduled_import', [ $this->importer, 'run_scheduled_import' ] );
         add_filter( 'cron_schedules', [ $this, 'add_cron_schedules' ] );
+
+        // Visualizador de gráficos
+        $this->visualizer->register_hooks();
+        add_action( 'admin_enqueue_scripts', [ $this->visualizer, 'enqueue_admin_chart_assets' ] );
 
         // Internacionalización
         add_action( 'init', [ $this, 'load_textdomain' ] );

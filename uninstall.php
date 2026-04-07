@@ -30,6 +30,23 @@ $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'sgr\_suite\_
 delete_transient( 'sgr_suite_import_progress' );
 delete_transient( 'sgr_suite_import_lock' );
 
+// 3b. Eliminar posts de gráficos SGR y sus transients de cache
+$chart_posts = get_posts( [
+    'post_type'   => 'sgr_chart',
+    'numberposts' => -1,
+    'post_status' => 'any',
+    'fields'      => 'ids',
+] );
+foreach ( $chart_posts as $chart_id ) {
+    delete_transient( 'sgr_chart_data_' . $chart_id );
+    wp_delete_post( $chart_id, true );
+}
+
+// 3c. Eliminar transients de columnas
+foreach ( [ 'proyectos', 'contratos', 'municipios', 'metas' ] as $t ) {
+    delete_transient( 'sgr_cols_' . $t );
+}
+
 // 4. Limpiar cron
 $timestamp = wp_next_scheduled( 'sgr_suite_scheduled_import' );
 if ( $timestamp ) {
