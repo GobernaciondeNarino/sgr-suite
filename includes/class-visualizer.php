@@ -156,13 +156,16 @@ class SGR_Suite_Visualizer {
      */
     public function get_chart_types(): array {
         return [
-            'bar'      => [ 'label' => esc_html__( 'Barras', 'sgr-suite' ), 'icon' => 'bar_chart' ],
-            'barH'     => [ 'label' => esc_html__( 'Barras Horizontales', 'sgr-suite' ), 'icon' => 'bar_h' ],
-            'line'     => [ 'label' => esc_html__( 'Líneas', 'sgr-suite' ), 'icon' => 'show_chart' ],
-            'pie'      => [ 'label' => esc_html__( 'Pastel', 'sgr-suite' ), 'icon' => 'pie_chart' ],
-            'donut'    => [ 'label' => esc_html__( 'Dona', 'sgr-suite' ), 'icon' => 'donut' ],
-            'treemap'  => [ 'label' => esc_html__( 'Treemap', 'sgr-suite' ), 'icon' => 'grid_view' ],
-            'pack'     => [ 'label' => esc_html__( 'Burbujas', 'sgr-suite' ), 'icon' => 'bubble_chart' ],
+            'bar'          => [ 'label' => esc_html__( 'Barras', 'sgr-suite' ) ],
+            'line'         => [ 'label' => esc_html__( 'Líneas', 'sgr-suite' ) ],
+            'area'         => [ 'label' => esc_html__( 'Área', 'sgr-suite' ) ],
+            'pie'          => [ 'label' => esc_html__( 'Pie / Torta', 'sgr-suite' ) ],
+            'donut'        => [ 'label' => esc_html__( 'Donut', 'sgr-suite' ) ],
+            'treemap'      => [ 'label' => esc_html__( 'Treemap', 'sgr-suite' ) ],
+            'barH'         => [ 'label' => esc_html__( 'Barras Horizontales', 'sgr-suite' ) ],
+            'pack'         => [ 'label' => esc_html__( 'Burbujas (Pack)', 'sgr-suite' ) ],
+            'stacked_bar'  => [ 'label' => esc_html__( 'Barras Apiladas', 'sgr-suite' ) ],
+            'grouped_bar'  => [ 'label' => esc_html__( 'Barras Agrupadas', 'sgr-suite' ) ],
         ];
     }
 

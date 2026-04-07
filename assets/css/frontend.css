@@ -480,42 +480,79 @@
     padding: 20px;
 }
 
-/* Toolbar */
+/* Toolbar - secop-suite style */
 .sgr-chart-toolbar {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
-    padding: 12px 20px;
-    background: #f8fafc;
-    border-bottom: 2px solid var(--sgr-search-border, #348afb);
+    padding: 8px 15px;
+    background: transparent;
+    border-bottom: none;
 }
 
 .sgr-chart-title {
-    font-weight: 700;
-    color: var(--sgr-title-color, #334155);
-    font-size: 16px;
+    display: none;
 }
 
 .sgr-chart-toolbar-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .sgr-chart-toolbar-btn {
-    background: #fff;
-    border: 1px solid #d1d5db;
-    padding: 6px 12px;
+    background: transparent;
+    border: none;
+    padding: 6px 10px;
     cursor: pointer;
-    font-size: 14px;
-    transition: background 0.2s, color 0.2s, border-color 0.2s;
-    border-radius: var(--sgr-card-radius, 0px);
+    font-size: 13px;
+    color: #4b5563;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: color 0.2s;
+    font-family: inherit;
+    white-space: nowrap;
 }
 
 .sgr-chart-toolbar-btn:hover {
-    background: var(--sgr-badge-bg, #348afb);
-    color: #fff;
-    border-color: var(--sgr-badge-bg, #348afb);
+    color: #1d4ed8;
 }
+
+.sgr-chart-toolbar-btn svg {
+    flex-shrink: 0;
+}
+
+/* Share buttons */
+.sgr-share-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.sgr-share-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: #fff;
+    text-decoration: none;
+    transition: transform 0.2s, opacity 0.2s;
+}
+
+.sgr-share-btn:hover {
+    transform: scale(1.1);
+    opacity: 0.9;
+}
+
+.sgr-share-fb { background: #1877F2; }
+.sgr-share-tw { background: #000000; }
+.sgr-share-li { background: #0A66C2; }
+.sgr-share-wa { background: #25D366; }
 
 /* Container */
 .sgr-chart-container {

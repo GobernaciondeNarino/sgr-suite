@@ -685,6 +685,86 @@ class SGR_Suite_Database {
                               GROUP BY p.id, p.numero_proyecto, p.nombre_proyecto",
                 'columns' => [ 'label', 'value' ],
             ],
+
+            // === VISTAS CON SERIES (para barras apiladas/agrupadas) ===
+
+            'valor_dependencia_x_entidad' => [
+                'label'   => 'Valor: Dependencia x Entidad (Apiladas)',
+                'sql'     => "SELECT p.dependencia_proyecto AS label,
+                                     p.entidad_ejecutora_proyecto AS series,
+                                     SUM(p.valor_proyecto) AS value
+                              FROM {$this->table('proyectos')} p
+                              WHERE p.dependencia_proyecto != '' AND p.entidad_ejecutora_proyecto != ''
+                              GROUP BY p.dependencia_proyecto, p.entidad_ejecutora_proyecto",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+            'contratos_dependencia_x_entidad' => [
+                'label'   => 'Contratos: Dependencia x Entidad (Agrupadas)',
+                'sql'     => "SELECT p.dependencia_proyecto AS label,
+                                     p.entidad_ejecutora_proyecto AS series,
+                                     COUNT(c.id) AS value
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != '' AND p.entidad_ejecutora_proyecto != ''
+                              GROUP BY p.dependencia_proyecto, p.entidad_ejecutora_proyecto",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+            'valor_municipio_x_dependencia' => [
+                'label'   => 'Inversión: Municipio x Dependencia (Apiladas)',
+                'sql'     => "SELECT m.nombre AS label,
+                                     p.dependencia_proyecto AS series,
+                                     SUM(c.valor_contrato) AS value
+                              FROM {$this->table('municipios')} m
+                              INNER JOIN {$this->table('contratos')} c ON m.contrato_id = c.id
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY m.nombre, p.dependencia_proyecto",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+            'avance_dependencia_x_ops' => [
+                'label'   => 'Avance: Dependencia x Tipo OPS (Agrupadas)',
+                'sql'     => "SELECT p.dependencia_proyecto AS label,
+                                     CASE WHEN c.es_ops_ejec_contractual IN ('SI','Sí','si','1') THEN 'OPS' ELSE 'No OPS' END AS series,
+                                     AVG(c.porcentaje_avance_fisico) AS value
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY p.dependencia_proyecto, series",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+            'proyectos_y_contratos_por_dependencia' => [
+                'label'   => 'Proyectos vs Contratos por Dependencia (Agrupadas)',
+                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
+                                SELECT p.dependencia_proyecto AS label, 'Proyectos' AS series, COUNT(DISTINCT p.id) AS value
+                                FROM {$this->table('proyectos')} p
+                                WHERE p.dependencia_proyecto != ''
+                                GROUP BY p.dependencia_proyecto
+                                UNION ALL
+                                SELECT p.dependencia_proyecto AS label, 'Contratos' AS series, COUNT(c.id) AS value
+                                FROM {$this->table('contratos')} c
+                                INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                                WHERE p.dependencia_proyecto != ''
+                                GROUP BY p.dependencia_proyecto
+                              ) sub",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+            'metas_y_contratos_por_dependencia' => [
+                'label'   => 'Metas vs Contratos por Dependencia (Agrupadas)',
+                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
+                                SELECT p.dependencia_proyecto AS label, 'Metas' AS series, COUNT(mt.id) AS value
+                                FROM {$this->table('metas')} mt
+                                INNER JOIN {$this->table('proyectos')} p ON mt.proyecto_id = p.id
+                                WHERE p.dependencia_proyecto != ''
+                                GROUP BY p.dependencia_proyecto
+                                UNION ALL
+                                SELECT p.dependencia_proyecto AS label, 'Contratos' AS series, COUNT(c.id) AS value
+                                FROM {$this->table('contratos')} c
+                                INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                                WHERE p.dependencia_proyecto != ''
+                                GROUP BY p.dependencia_proyecto
+                              ) sub",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
         ];
     }
 
