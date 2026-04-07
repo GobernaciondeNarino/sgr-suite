@@ -71,19 +71,27 @@ foreach ( $views as $vk => $vi ) {
                 <th><label for="sgr-data-view"><?php esc_html_e( 'Vista predefinida', 'sgr-suite' ); ?></label></th>
                 <td>
                     <select name="sgr_chart[data_view]" id="sgr-data-view" class="regular-text" style="min-width:360px;">
-                        <optgroup label="<?php esc_attr_e( 'Vistas simples', 'sgr-suite' ); ?>">
-                        <?php foreach ( $data_views as $vk => $vl ) :
-                            if ( str_contains( $vk, '_x_' ) || str_contains( $vk, '_y_' ) ) continue;
+                        <?php
+                        $simple_views = [];
+                        $series_views = [];
+                        foreach ( $data_views as $vk => $vl ) {
+                            $view_def = $views[ $vk ] ?? [];
+                            if ( in_array( 'series', $view_def['columns'] ?? [], true ) ) {
+                                $series_views[ $vk ] = $vl;
+                            } else {
+                                $simple_views[ $vk ] = $vl;
+                            }
+                        }
                         ?>
+                        <optgroup label="<?php esc_attr_e( 'Vistas simples (Barras, Pie, Treemap, Líneas)', 'sgr-suite' ); ?>">
+                        <?php foreach ( $simple_views as $vk => $vl ) : ?>
                             <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $config['data_view'] ?? 'valor_por_dependencia', $vk ); ?>>
                                 <?php echo esc_html( $vl ); ?>
                             </option>
                         <?php endforeach; ?>
                         </optgroup>
-                        <optgroup label="<?php esc_attr_e( 'Vistas con series (Apiladas/Agrupadas)', 'sgr-suite' ); ?>">
-                        <?php foreach ( $data_views as $vk => $vl ) :
-                            if ( ! str_contains( $vk, '_x_' ) && ! str_contains( $vk, '_y_' ) ) continue;
-                        ?>
+                        <optgroup label="<?php esc_attr_e( 'Vistas con series (Barras Apiladas / Agrupadas)', 'sgr-suite' ); ?>">
+                        <?php foreach ( $series_views as $vk => $vl ) : ?>
                             <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $config['data_view'] ?? '', $vk ); ?>>
                                 <?php echo esc_html( $vl ); ?>
                             </option>

@@ -83,10 +83,19 @@ class SGR_Suite_Importer {
             ];
         }
 
+        // Validar estructura: soporta tanto {ok, proyectos} como {proyectos}
         if ( ! isset( $data['proyectos'] ) || ! is_array( $data['proyectos'] ) ) {
             return [
                 'success' => false,
                 'error'   => 'Estructura de datos inválida en la respuesta del API.',
+            ];
+        }
+
+        // Si la API tiene campo 'ok' y es false, reportar error
+        if ( isset( $data['ok'] ) && ! $data['ok'] ) {
+            return [
+                'success' => false,
+                'error'   => 'La API reportó un error (ok=false).',
             ];
         }
 
