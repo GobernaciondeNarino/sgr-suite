@@ -2,8 +2,31 @@
  * SGR Suite - Admin Styles
  *
  * @package SGR_Suite
- * @since   1.0.0
+ * @since   2.0.0
  */
+
+:root {
+    --sgr-admin-primary: #348afb;
+    --sgr-admin-primary-dark: #1e6ad4;
+    --sgr-admin-primary-light: #e8f2ff;
+    --sgr-admin-danger: #d63638;
+    --sgr-admin-danger-dark: #b32d2e;
+    --sgr-admin-success: #46b450;
+    --sgr-admin-warning: #dba617;
+    --sgr-admin-text: #1d2327;
+    --sgr-admin-text-muted: #50575e;
+    --sgr-admin-border: #c3c4c7;
+    --sgr-admin-bg-light: #f6f7f7;
+    --sgr-admin-radius: 6px;
+    --sgr-admin-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --sgr-admin-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --sgr-admin-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+    --sgr-admin-transition: 0.2s ease;
+}
+
+/* ========================================
+   Layout
+   ======================================== */
 
 .sgr-suite-admin {
     max-width: 1200px;
@@ -12,11 +35,20 @@
 .sgr-suite-admin h1 {
     font-size: 28px;
     font-weight: 700;
-    color: #1d2327;
+    color: var(--sgr-admin-text);
     margin-bottom: 5px;
 }
 
-/* Cards de estadísticas */
+.sgr-suite-admin .sgr-admin-subtitle {
+    color: var(--sgr-admin-text-muted);
+    font-size: 14px;
+    margin: 0 0 20px 0;
+}
+
+/* ========================================
+   Stat Cards Grid
+   ======================================== */
+
 .sgr-admin-cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -26,35 +58,52 @@
 
 .sgr-admin-card {
     background: #fff;
-    border: 1px solid #c3c4c7;
-    border-left: 4px solid #348afb;
-    border-radius: 0;
+    border: 1px solid var(--sgr-admin-border);
+    border-left: 4px solid var(--sgr-admin-primary);
+    border-radius: var(--sgr-admin-radius);
     padding: 20px;
     text-align: center;
+    transition: box-shadow var(--sgr-admin-transition), transform var(--sgr-admin-transition);
+    box-shadow: var(--sgr-admin-shadow-sm);
+}
+
+.sgr-admin-card:hover {
+    box-shadow: 0 4px 12px rgba(52, 138, 251, 0.15);
+    transform: translateY(-2px);
 }
 
 .sgr-admin-card-number {
     font-size: 28px;
     font-weight: 900;
-    color: #1d2327;
+    color: var(--sgr-admin-text);
     line-height: 1.2;
     word-break: break-word;
+    background: linear-gradient(135deg, var(--sgr-admin-primary), var(--sgr-admin-primary-dark));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .sgr-admin-card-label {
-    font-size: 13px;
-    color: #50575e;
+    font-size: 12px;
+    color: var(--sgr-admin-text-muted);
     text-transform: uppercase;
     font-weight: 600;
-    margin-top: 5px;
+    margin-top: 6px;
+    letter-spacing: 0.5px;
 }
 
-/* Secciones */
+/* ========================================
+   Sections
+   ======================================== */
+
 .sgr-admin-section {
     background: #fff;
-    border: 1px solid #c3c4c7;
+    border: 1px solid var(--sgr-admin-border);
+    border-radius: var(--sgr-admin-radius);
     padding: 20px;
     margin: 20px 0;
+    box-shadow: var(--sgr-admin-shadow-sm);
 }
 
 .sgr-admin-section h2 {
@@ -62,22 +111,25 @@
     margin-top: 0;
     padding-bottom: 10px;
     border-bottom: 1px solid #f0f0f1;
-    color: #1d2327;
+    color: var(--sgr-admin-text);
 }
 
-/* Barra de progreso */
+/* ========================================
+   Progress Bar
+   ======================================== */
+
 .sgr-progress-bar-container {
     height: 30px;
-    background: #f0f0f1;
-    border-radius: 3px;
+    background: var(--sgr-admin-bg-light);
+    border-radius: var(--sgr-admin-radius);
     overflow: hidden;
-    border: 1px solid #c3c4c7;
+    border: 1px solid var(--sgr-admin-border);
 }
 
 .sgr-progress-bar {
     height: 100%;
-    background: #348afb;
-    transition: width 0.5s ease;
+    background: linear-gradient(90deg, var(--sgr-admin-primary), var(--sgr-admin-primary-dark));
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -85,30 +137,62 @@
     font-size: 13px;
     font-weight: 600;
     min-width: 0;
+    position: relative;
+    overflow: hidden;
 }
 
-/* Zona de peligro */
+.sgr-progress-bar::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.25),
+        transparent
+    );
+    animation: sgr-shimmer 2s infinite;
+}
+
+@keyframes sgr-shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* ========================================
+   Danger Zone
+   ======================================== */
+
 .sgr-danger-zone {
-    border-color: #d63638;
-    border-left: 4px solid #d63638;
+    border-color: var(--sgr-admin-danger);
+    border-left: 4px solid var(--sgr-admin-danger);
+    background: #fffafa;
 }
 
 .sgr-danger-zone h2 {
-    color: #d63638;
+    color: var(--sgr-admin-danger);
 }
 
 .sgr-btn-danger {
-    background: #d63638 !important;
-    border-color: #d63638 !important;
+    background: var(--sgr-admin-danger) !important;
+    border-color: var(--sgr-admin-danger) !important;
     color: #fff !important;
+    border-radius: 4px !important;
+    transition: background var(--sgr-admin-transition);
 }
 
 .sgr-btn-danger:hover {
-    background: #b32d2e !important;
-    border-color: #b32d2e !important;
+    background: var(--sgr-admin-danger-dark) !important;
+    border-color: var(--sgr-admin-danger-dark) !important;
 }
 
-/* Filtros admin */
+/* ========================================
+   Admin Filters
+   ======================================== */
+
 .sgr-admin-filters-form {
     margin: 15px 0;
 }
@@ -120,17 +204,21 @@
     align-items: flex-end;
 }
 
-/* Log viewer */
+/* ========================================
+   Log Viewer
+   ======================================== */
+
 .sgr-log-viewer {
     background: #1d2327;
-    border-radius: 3px;
+    border-radius: var(--sgr-admin-radius);
     max-height: 600px;
     overflow-y: auto;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .sgr-log-content {
     color: #c3c4c7;
-    font-family: Consolas, Monaco, monospace;
+    font-family: "JetBrains Mono", Consolas, Monaco, monospace;
     font-size: 12px;
     line-height: 1.8;
     padding: 15px;
@@ -140,12 +228,12 @@
 }
 
 .sgr-log-error {
-    color: #d63638;
+    color: #ff6b6b;
     font-weight: bold;
 }
 
 .sgr-log-warning {
-    color: #dba617;
+    color: #ffd93d;
     font-weight: bold;
 }
 
@@ -157,24 +245,399 @@
     color: #8c8f94;
 }
 
-/* Import result */
+/* ========================================
+   Import Results
+   ======================================== */
+
 .sgr-import-success {
     background: #edfaef;
-    border: 1px solid #46b450;
-    border-left: 4px solid #46b450;
+    border: 1px solid var(--sgr-admin-success);
+    border-left: 4px solid var(--sgr-admin-success);
     padding: 12px 15px;
-    border-radius: 0;
+    border-radius: var(--sgr-admin-radius);
 }
 
 .sgr-import-error {
     background: #fcf0f1;
-    border: 1px solid #d63638;
-    border-left: 4px solid #d63638;
+    border: 1px solid var(--sgr-admin-danger);
+    border-left: 4px solid var(--sgr-admin-danger);
     padding: 12px 15px;
-    border-radius: 0;
+    border-radius: var(--sgr-admin-radius);
 }
 
-/* Responsive */
+/* ========================================
+   Chart Config - Meta Box
+   ======================================== */
+
+.sgr-chart-config-wrap {
+    max-width: 900px;
+}
+
+.sgr-config-section {
+    background: #fff;
+    border: 1px solid var(--sgr-admin-border);
+    border-radius: var(--sgr-admin-radius);
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    box-shadow: var(--sgr-admin-shadow-sm);
+}
+
+.sgr-config-section h3 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f1;
+    color: var(--sgr-admin-text);
+    font-size: 14px;
+}
+
+/* Chart Type Grid */
+.sgr-chart-type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+}
+
+.sgr-chart-type-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px 10px;
+    border: 2px solid #e5e7eb;
+    cursor: pointer;
+    text-align: center;
+    transition: all var(--sgr-admin-transition);
+    border-radius: var(--sgr-admin-radius);
+    background: #fff;
+}
+
+.sgr-chart-type-option:hover {
+    border-color: var(--sgr-admin-primary);
+    background: var(--sgr-admin-primary-light);
+}
+
+.sgr-chart-type-option.selected {
+    border-color: var(--sgr-admin-primary);
+    background: var(--sgr-admin-primary-light);
+    box-shadow: 0 0 0 1px var(--sgr-admin-primary);
+}
+
+.sgr-chart-type-option input[type="radio"] {
+    display: none;
+}
+
+.sgr-chart-type-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: #334155;
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.sgr-chart-type-icon {
+    font-size: 28px;
+    line-height: 1;
+}
+
+.sgr-chart-type-icon[data-type="bar"]::before { content: "\1F4CA"; }
+.sgr-chart-type-icon[data-type="barH"]::before { content: "\1F4CA"; }
+.sgr-chart-type-icon[data-type="line"]::before { content: "\1F4C8"; }
+.sgr-chart-type-icon[data-type="pie"]::before { content: "\1F967"; }
+.sgr-chart-type-icon[data-type="donut"]::before { content: "\1F369"; }
+.sgr-chart-type-icon[data-type="treemap"]::before { content: "\1F5FA"; }
+.sgr-chart-type-icon[data-type="pack"]::before { content: "\1FAE7"; }
+
+/* Filter rows */
+.sgr-filter-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.sgr-filter-row select,
+.sgr-filter-row input[type="text"] {
+    flex: 1;
+}
+
+.sgr-remove-filter {
+    color: var(--sgr-admin-danger) !important;
+    border-color: var(--sgr-admin-danger) !important;
+    font-weight: bold;
+}
+
+/* Color Swatches */
+.sgr-color-swatches {
+    display: flex;
+    gap: 5px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.sgr-color-swatch {
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #ccc;
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+
+.sgr-color-swatch:hover {
+    transform: scale(1.15);
+}
+
+/* ========================================
+   Card Customizer Page
+   ======================================== */
+
+.sgr-customizer-wrap {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 20px;
+    align-items: start;
+}
+
+.sgr-customizer-form {
+    min-width: 0;
+}
+
+.sgr-customizer-preview {
+    position: sticky;
+    top: 50px;
+}
+
+/* Tab Navigation */
+.sgr-customizer-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0 0 20px 0;
+    border-bottom: 2px solid var(--sgr-admin-border);
+    padding: 0;
+    list-style: none;
+}
+
+.sgr-customizer-tab {
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sgr-admin-text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all var(--sgr-admin-transition);
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+}
+
+.sgr-customizer-tab:hover {
+    color: var(--sgr-admin-primary);
+    background: var(--sgr-admin-primary-light);
+}
+
+.sgr-customizer-tab.active {
+    color: var(--sgr-admin-primary);
+    border-bottom-color: var(--sgr-admin-primary);
+    background: var(--sgr-admin-primary-light);
+}
+
+/* Customizer Sections */
+.sgr-customizer-section {
+    display: none;
+}
+
+.sgr-customizer-section.active {
+    display: block;
+}
+
+/* Fieldset Groups */
+.sgr-fieldset-group {
+    background: #fff;
+    border: 1px solid var(--sgr-admin-border);
+    border-radius: var(--sgr-admin-radius);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--sgr-admin-shadow-sm);
+}
+
+.sgr-fieldset-group h3 {
+    margin: 0 0 12px 0;
+    padding: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--sgr-admin-text);
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.sgr-fieldset-group .form-table {
+    margin: 0;
+}
+
+.sgr-fieldset-group .form-table th {
+    padding: 10px 10px 10px 0;
+    font-weight: 500;
+    font-size: 13px;
+    width: 160px;
+}
+
+.sgr-fieldset-group .form-table td {
+    padding: 10px 0;
+}
+
+/* Color picker fields */
+.sgr-color-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sgr-color-field input[type="color"] {
+    width: 40px;
+    height: 34px;
+    padding: 2px;
+    border: 1px solid var(--sgr-admin-border);
+    border-radius: 4px;
+    cursor: pointer;
+    background: #fff;
+}
+
+.sgr-color-field input[type="color"]:hover {
+    border-color: var(--sgr-admin-primary);
+}
+
+.sgr-color-field input[type="text"] {
+    width: 90px;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12px;
+}
+
+/* Preview Panel */
+.sgr-preview-panel {
+    background: #fff;
+    border: 1px solid var(--sgr-admin-border);
+    border-radius: var(--sgr-admin-radius);
+    padding: 20px;
+    box-shadow: var(--sgr-admin-shadow-md);
+}
+
+.sgr-preview-panel h3 {
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--sgr-admin-text);
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.sgr-preview-card {
+    border-radius: var(--sgr-card-radius, 0);
+    background: var(--sgr-card-bg, #fff);
+    border: 1px solid var(--sgr-card-border, #e5e7eb);
+    overflow: hidden;
+    box-shadow: var(--sgr-card-shadow, none);
+    transition: all 0.3s ease;
+    max-width: 310px;
+    margin: 0 auto;
+}
+
+.sgr-preview-card:hover {
+    box-shadow: var(--sgr-card-hover-shadow, 0 10px 25px rgba(0, 0, 0, 0.08));
+    transform: translateY(var(--sgr-card-hover-translate, -5px));
+}
+
+.sgr-preview-card-image {
+    height: 160px;
+    background: linear-gradient(135deg, var(--sgr-admin-primary-light), #d0e4ff);
+    border-bottom: 3px solid var(--sgr-admin-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--sgr-admin-primary);
+    font-size: 48px;
+    position: relative;
+}
+
+.sgr-preview-card-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--sgr-admin-primary);
+    color: #fff;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.sgr-preview-card-body {
+    padding: 15px;
+}
+
+.sgr-preview-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #334155;
+    margin: 0 0 6px 0;
+    line-height: 1.3;
+}
+
+.sgr-preview-card-bpin {
+    font-size: 12px;
+    color: var(--sgr-admin-primary);
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.sgr-preview-card-footer {
+    padding: 10px 15px;
+    border-top: 1px solid #f0f0f1;
+    font-size: 12px;
+    color: #666;
+    display: flex;
+    justify-content: space-between;
+}
+
+.sgr-preview-card-stats {
+    display: flex;
+    gap: 12px;
+    padding: 8px 15px;
+    border-top: 1px solid #f0f0f1;
+}
+
+.sgr-preview-card-stat {
+    text-align: center;
+    flex: 1;
+}
+
+.sgr-preview-card-stat-number {
+    font-size: 16px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.sgr-preview-card-stat-label {
+    font-size: 10px;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
+
+/* ========================================
+   Responsive
+   ======================================== */
+
+@media (max-width: 1024px) {
+    .sgr-customizer-wrap {
+        grid-template-columns: 1fr;
+    }
+
+    .sgr-customizer-preview {
+        position: static;
+    }
+}
+
 @media (max-width: 782px) {
     .sgr-admin-cards {
         grid-template-columns: 1fr 1fr;
@@ -182,5 +645,29 @@
 
     .sgr-admin-filters-row {
         flex-direction: column;
+    }
+
+    .sgr-chart-type-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+
+    .sgr-customizer-tabs {
+        gap: 0;
+    }
+
+    .sgr-customizer-tab {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .sgr-fieldset-group .form-table th {
+        width: auto;
+        display: block;
+        padding-bottom: 4px;
+    }
+
+    .sgr-fieldset-group .form-table td {
+        display: block;
+        padding-top: 0;
     }
 }

@@ -54,7 +54,11 @@ class SGR_Suite_Updater {
             $this->logger->info( 'Migración v1.0.0: Tablas creadas.' );
         }
 
-        // Futuras migraciones se agregan aquí:
-        // if ( version_compare( $from_version, '1.1.0', '<' ) ) { ... }
+        // v2.0.0: Recrear tablas con FK robustas, limpiar caches
+        if ( version_compare( $from_version, '2.0.0', '<' ) ) {
+            $this->database->create_tables();
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.0.0: FK robustas, chart views, card customizer.' );
+        }
     }
 }

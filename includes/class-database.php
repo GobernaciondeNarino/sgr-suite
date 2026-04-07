@@ -1,9 +1,10 @@
 <?php
 /**
- * SGR Suite - Clase de Base de Datos
+ * SGR Suite - Clase de Base de Datos v2.0.0
  *
  * Gestiona la creación, consulta y mantenimiento de las tablas
  * para proyectos, contratos, municipios, metas e imágenes del SGR.
+ * Incluye soporte para consultas con JOIN entre tablas para gráficos.
  *
  * @package SGR_Suite
  * @since   1.0.0
@@ -28,7 +29,7 @@ class SGR_Suite_Database {
     }
 
     /**
-     * Nombres de tablas.
+     * Nombres de tablas (whitelist).
      */
     public function table( string $name ): string {
         $allowed = [ 'proyectos', 'contratos', 'municipios', 'metas', 'imagenes' ];
@@ -40,6 +41,7 @@ class SGR_Suite_Database {
 
     /**
      * Crear todas las tablas del plugin.
+     * Usa dbDelta para tablas + queries directas para FK (dbDelta no las maneja bien).
      */
     public function create_tables(): void {
         global $wpdb;
@@ -48,8 +50,8 @@ class SGR_Suite_Database {
 
         $charset = $wpdb->get_charset_collate();
 
-        // Tabla de Proyectos
-        $sql_proyectos = "CREATE TABLE {$this->table('proyectos')} (
+        // 1. Tabla de Proyectos
+        dbDelta( "CREATE TABLE {$this->table('proyectos')} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             numero_proyecto VARCHAR(100) NOT NULL,
             nombre_proyecto TEXT NOT NULL,
@@ -64,10 +66,10 @@ class SGR_Suite_Database {
             KEY idx_dependencia (dependencia_proyecto(191)),
             KEY idx_entidad (entidad_ejecutora_proyecto(191)),
             KEY idx_fecha_importacion (fecha_importacion)
-        ) {$charset};";
+        ) {$charset};" );
 
-        // Tabla de Contratos
-        $sql_contratos = "CREATE TABLE {$this->table('contratos')} (
+        // 2. Tabla de Contratos
+        dbDelta( "CREATE TABLE {$this->table('contratos')} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             proyecto_id BIGINT UNSIGNED NOT NULL,
             numero_contrato VARCHAR(100) DEFAULT '',
@@ -79,49 +81,102 @@ class SGR_Suite_Database {
             fecha_importacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY idx_proyecto_id (proyecto_id),
-            KEY idx_numero_contrato (numero_contrato),
-            CONSTRAINT fk_contrato_proyecto FOREIGN KEY (proyecto_id) REFERENCES {$this->table('proyectos')}(id) ON DELETE CASCADE
-        ) {$charset};";
+            KEY idx_numero_contrato (numero_contrato)
+        ) {$charset};" );
 
-        // Tabla de Municipios por contrato
-        $sql_municipios = "CREATE TABLE {$this->table('municipios')} (
+        // 3. Tabla de Municipios
+        dbDelta( "CREATE TABLE {$this->table('municipios')} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             contrato_id BIGINT UNSIGNED NOT NULL,
             nombre VARCHAR(255) NOT NULL,
             poblacion_beneficiada INT UNSIGNED DEFAULT 0,
             PRIMARY KEY (id),
             KEY idx_contrato_id (contrato_id),
-            KEY idx_nombre (nombre(191)),
-            CONSTRAINT fk_municipio_contrato FOREIGN KEY (contrato_id) REFERENCES {$this->table('contratos')}(id) ON DELETE CASCADE
-        ) {$charset};";
+            KEY idx_nombre (nombre(191))
+        ) {$charset};" );
 
-        // Tabla de Metas por proyecto
-        $sql_metas = "CREATE TABLE {$this->table('metas')} (
+        // 4. Tabla de Metas
+        dbDelta( "CREATE TABLE {$this->table('metas')} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             proyecto_id BIGINT UNSIGNED NOT NULL,
             descripcion_meta TEXT NOT NULL,
             PRIMARY KEY (id),
-            KEY idx_proyecto_id (proyecto_id),
-            CONSTRAINT fk_meta_proyecto FOREIGN KEY (proyecto_id) REFERENCES {$this->table('proyectos')}(id) ON DELETE CASCADE
-        ) {$charset};";
+            KEY idx_proyecto_id (proyecto_id)
+        ) {$charset};" );
 
-        // Tabla de Imágenes por contrato
-        $sql_imagenes = "CREATE TABLE {$this->table('imagenes')} (
+        // 5. Tabla de Imágenes
+        dbDelta( "CREATE TABLE {$this->table('imagenes')} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             contrato_id BIGINT UNSIGNED NOT NULL,
             url_imagen TEXT NOT NULL,
             PRIMARY KEY (id),
-            KEY idx_contrato_id (contrato_id),
-            CONSTRAINT fk_imagen_contrato FOREIGN KEY (contrato_id) REFERENCES {$this->table('contratos')}(id) ON DELETE CASCADE
-        ) {$charset};";
+            KEY idx_contrato_id (contrato_id)
+        ) {$charset};" );
 
-        dbDelta( $sql_proyectos );
-        dbDelta( $sql_contratos );
-        dbDelta( $sql_municipios );
-        dbDelta( $sql_metas );
-        dbDelta( $sql_imagenes );
+        // 6. Foreign Keys (dbDelta no las maneja correctamente, usar queries directas)
+        $this->ensure_foreign_keys();
 
         $this->logger->info( 'Tablas del SGR creadas/actualizadas correctamente.' );
+    }
+
+    /**
+     * Crear FK constraints si no existen.
+     */
+    private function ensure_foreign_keys(): void {
+        global $wpdb;
+
+        $fks = [
+            [
+                'table'      => $this->table( 'contratos' ),
+                'name'       => 'fk_contrato_proyecto',
+                'column'     => 'proyecto_id',
+                'ref_table'  => $this->table( 'proyectos' ),
+                'ref_column' => 'id',
+            ],
+            [
+                'table'      => $this->table( 'municipios' ),
+                'name'       => 'fk_municipio_contrato',
+                'column'     => 'contrato_id',
+                'ref_table'  => $this->table( 'contratos' ),
+                'ref_column' => 'id',
+            ],
+            [
+                'table'      => $this->table( 'metas' ),
+                'name'       => 'fk_meta_proyecto',
+                'column'     => 'proyecto_id',
+                'ref_table'  => $this->table( 'proyectos' ),
+                'ref_column' => 'id',
+            ],
+            [
+                'table'      => $this->table( 'imagenes' ),
+                'name'       => 'fk_imagen_contrato',
+                'column'     => 'contrato_id',
+                'ref_table'  => $this->table( 'contratos' ),
+                'ref_column' => 'id',
+            ],
+        ];
+
+        foreach ( $fks as $fk ) {
+            $exists = $wpdb->get_var(
+                $wpdb->prepare(
+                    "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+                     WHERE CONSTRAINT_SCHEMA = DATABASE()
+                     AND CONSTRAINT_NAME = %s
+                     AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
+                    $fk['name']
+                )
+            );
+
+            if ( ! $exists ) {
+                $wpdb->query( // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+                    "ALTER TABLE {$fk['table']}
+                     ADD CONSTRAINT {$fk['name']}
+                     FOREIGN KEY ({$fk['column']})
+                     REFERENCES {$fk['ref_table']}({$fk['ref_column']})
+                     ON DELETE CASCADE"
+                );
+            }
+        }
     }
 
     /**
@@ -130,11 +185,12 @@ class SGR_Suite_Database {
     public function drop_tables(): void {
         global $wpdb;
 
-        // Orden inverso por dependencias de FK
+        $wpdb->query( 'SET FOREIGN_KEY_CHECKS = 0' );
         $tables = [ 'imagenes', 'municipios', 'metas', 'contratos', 'proyectos' ];
         foreach ( $tables as $t ) {
             $wpdb->query( "DROP TABLE IF EXISTS {$this->table( $t )}" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         }
+        $wpdb->query( 'SET FOREIGN_KEY_CHECKS = 1' );
 
         $this->logger->info( 'Todas las tablas del SGR fueron eliminadas.' );
     }
@@ -156,7 +212,7 @@ class SGR_Suite_Database {
     }
 
     /**
-     * AJAX: Vaciar datos.
+     * AJAX: Vaciar datos (también limpia cache de gráficos).
      */
     public function ajax_truncate_data(): void {
         check_ajax_referer( 'sgr_suite_admin_nonce', 'nonce' );
@@ -166,14 +222,26 @@ class SGR_Suite_Database {
         }
 
         $this->truncate_tables();
+        $this->clear_chart_caches();
+
         wp_send_json_success( [ 'message' => 'Datos eliminados correctamente.' ] );
     }
 
     /**
+     * Limpiar todas las caches de gráficos.
+     */
+    public function clear_chart_caches(): void {
+        global $wpdb;
+        $chart_ids = $wpdb->get_col(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'sgr_chart' AND post_status = 'publish'"
+        );
+        foreach ( $chart_ids as $cid ) {
+            delete_transient( 'sgr_chart_data_' . $cid );
+        }
+    }
+
+    /**
      * Insertar o actualizar un proyecto completo con sus relaciones.
-     *
-     * @param array $proyecto Datos del proyecto desde la API.
-     * @return int|false ID del proyecto insertado o false en error.
      */
     public function upsert_proyecto( array $proyecto ): int|false {
         global $wpdb;
@@ -189,7 +257,6 @@ class SGR_Suite_Database {
         $entidad  = sanitize_text_field( $proyecto['entidadEjecutoraProyecto'] ?? '' );
         $contratos_count = ! empty( $proyecto['contratosProyecto'] ) ? count( $proyecto['contratosProyecto'] ) : 0;
 
-        // Upsert proyecto
         $wpdb->query(
             $wpdb->prepare(
                 "INSERT INTO {$this->table('proyectos')}
@@ -201,16 +268,10 @@ class SGR_Suite_Database {
                     dependencia_proyecto = VALUES(dependencia_proyecto),
                     entidad_ejecutora_proyecto = VALUES(entidad_ejecutora_proyecto),
                     total_contratos = VALUES(total_contratos)",
-                $numero,
-                $nombre,
-                $valor,
-                $dep,
-                $entidad,
-                $contratos_count
+                $numero, $nombre, $valor, $dep, $entidad, $contratos_count
             )
         );
 
-        // Obtener ID
         $proyecto_id = $wpdb->get_var(
             $wpdb->prepare(
                 "SELECT id FROM {$this->table('proyectos')} WHERE numero_proyecto = %s",
@@ -224,8 +285,9 @@ class SGR_Suite_Database {
 
         $proyecto_id = (int) $proyecto_id;
 
-        // Limpiar datos relacionados previos
-        $this->delete_related_data( $proyecto_id );
+        // Limpiar datos previos: solo borrar contratos (CASCADE elimina municipios e imágenes) y metas
+        $wpdb->delete( $this->table( 'metas' ), [ 'proyecto_id' => $proyecto_id ], [ '%d' ] );
+        $wpdb->delete( $this->table( 'contratos' ), [ 'proyecto_id' => $proyecto_id ], [ '%d' ] );
 
         // Insertar metas
         if ( ! empty( $proyecto['metasProyecto'] ) && is_array( $proyecto['metasProyecto'] ) ) {
@@ -234,10 +296,7 @@ class SGR_Suite_Database {
                 if ( ! empty( $meta_text ) ) {
                     $wpdb->insert(
                         $this->table( 'metas' ),
-                        [
-                            'proyecto_id'     => $proyecto_id,
-                            'descripcion_meta' => $meta_text,
-                        ],
+                        [ 'proyecto_id' => $proyecto_id, 'descripcion_meta' => $meta_text ],
                         [ '%d', '%s' ]
                     );
                 }
@@ -258,40 +317,19 @@ class SGR_Suite_Database {
         return $proyecto_id;
     }
 
-    /**
-     * Eliminar datos relacionados de un proyecto (contratos, metas, municipios, imágenes).
-     */
-    private function delete_related_data( int $proyecto_id ): void {
-        global $wpdb;
-
-        // Las FK con CASCADE manejan las dependencias
-        $wpdb->delete( $this->table( 'metas' ), [ 'proyecto_id' => $proyecto_id ], [ '%d' ] );
-        $wpdb->delete( $this->table( 'contratos' ), [ 'proyecto_id' => $proyecto_id ], [ '%d' ] );
-    }
-
-    /**
-     * Insertar un contrato.
-     */
     private function insert_contrato( int $proyecto_id, array $contrato, int $idx ): int|false {
         global $wpdb;
-
-        $numero     = sanitize_text_field( $contrato['numeroContrato'] ?? (string) ( $idx + 1 ) );
-        $valor      = floatval( $contrato['valorContrato'] ?? 0 );
-        $objeto     = sanitize_textarea_field( $contrato['objetoContrato'] ?? '' );
-        $es_ops     = sanitize_text_field( $contrato['esOpsEjecContractual'] ?? '' );
-        $avance     = floatval( $contrato['procentajeAvanceFisico'] ?? 0 );
-        $desc       = sanitize_textarea_field( $contrato['descripcionEjecContractual'] ?? '' );
 
         $inserted = $wpdb->insert(
             $this->table( 'contratos' ),
             [
                 'proyecto_id'                  => $proyecto_id,
-                'numero_contrato'              => $numero,
-                'valor_contrato'               => $valor,
-                'objeto_contrato'              => $objeto,
-                'es_ops_ejec_contractual'      => $es_ops,
-                'porcentaje_avance_fisico'     => $avance,
-                'descripcion_ejec_contractual' => $desc,
+                'numero_contrato'              => sanitize_text_field( $contrato['numeroContrato'] ?? (string) ( $idx + 1 ) ),
+                'valor_contrato'               => floatval( $contrato['valorContrato'] ?? 0 ),
+                'objeto_contrato'              => sanitize_textarea_field( $contrato['objetoContrato'] ?? '' ),
+                'es_ops_ejec_contractual'      => sanitize_text_field( $contrato['esOpsEjecContractual'] ?? '' ),
+                'porcentaje_avance_fisico'     => floatval( $contrato['procentajeAvanceFisico'] ?? 0 ),
+                'descripcion_ejec_contractual' => sanitize_textarea_field( $contrato['descripcionEjecContractual'] ?? '' ),
             ],
             [ '%d', '%s', '%f', '%s', '%s', '%f', '%s' ]
         );
@@ -299,9 +337,6 @@ class SGR_Suite_Database {
         return $inserted ? (int) $wpdb->insert_id : false;
     }
 
-    /**
-     * Insertar municipios de un contrato.
-     */
     private function insert_municipios_contrato( int $contrato_id, array $contrato ): void {
         global $wpdb;
 
@@ -310,16 +345,14 @@ class SGR_Suite_Database {
         }
 
         foreach ( $contrato['municipiosEjecContractual'] as $mun ) {
-            $nombre    = sanitize_text_field( $mun['nombre'] ?? '' );
-            $poblacion = absint( $mun['poblacion_beneficiada'] ?? 0 );
-
+            $nombre = sanitize_text_field( $mun['nombre'] ?? '' );
             if ( ! empty( $nombre ) ) {
                 $wpdb->insert(
                     $this->table( 'municipios' ),
                     [
                         'contrato_id'          => $contrato_id,
                         'nombre'               => $nombre,
-                        'poblacion_beneficiada' => $poblacion,
+                        'poblacion_beneficiada' => absint( $mun['poblacion_beneficiada'] ?? 0 ),
                     ],
                     [ '%d', '%s', '%d' ]
                 );
@@ -327,9 +360,6 @@ class SGR_Suite_Database {
         }
     }
 
-    /**
-     * Insertar imágenes de un contrato.
-     */
     private function insert_imagenes_contrato( int $contrato_id, array $contrato ): void {
         global $wpdb;
 
@@ -342,21 +372,19 @@ class SGR_Suite_Database {
             if ( ! empty( $url ) && filter_var( $url, FILTER_VALIDATE_URL ) ) {
                 $wpdb->insert(
                     $this->table( 'imagenes' ),
-                    [
-                        'contrato_id' => $contrato_id,
-                        'url_imagen'  => $url,
-                    ],
+                    [ 'contrato_id' => $contrato_id, 'url_imagen' => $url ],
                     [ '%d', '%s' ]
                 );
             }
         }
     }
 
+    // =========================================================================
+    // CONSULTAS DE LECTURA
+    // =========================================================================
+
     /**
-     * Obtener todos los proyectos con sus relaciones desde la BD.
-     *
-     * @param array $args Argumentos de consulta opcionales.
-     * @return array
+     * Obtener proyectos con sus relaciones.
      */
     public function get_proyectos( array $args = [] ): array {
         global $wpdb;
@@ -367,13 +395,12 @@ class SGR_Suite_Database {
             'buscar'      => '',
             'dependencia' => '',
             'entidad'     => '',
-            'municipio'   => '',
             'orderby'     => 'nombre_proyecto',
             'order'       => 'ASC',
         ];
         $args = wp_parse_args( $args, $defaults );
 
-        $where   = [ '1=1' ];
+        $where   = [];
         $prepare = [];
 
         if ( ! empty( $args['buscar'] ) ) {
@@ -393,19 +420,29 @@ class SGR_Suite_Database {
             $prepare[] = sanitize_text_field( $args['entidad'] );
         }
 
-        $where_sql = implode( ' AND ', $where );
+        $where_sql = ! empty( $where ) ? 'WHERE ' . implode( ' AND ', $where ) : '';
 
-        // Ordenamiento seguro
         $allowed_orderby = [ 'nombre_proyecto', 'numero_proyecto', 'valor_proyecto', 'total_contratos', 'fecha_importacion' ];
         $orderby = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'nombre_proyecto';
         $order   = strtoupper( $args['order'] ) === 'DESC' ? 'DESC' : 'ASC';
 
         $limit_sql = '';
         if ( $args['limite'] > 0 ) {
-            $limit_sql = $wpdb->prepare( 'LIMIT %d OFFSET %d', absint( $args['limite'] ), absint( $args['offset'] ) );
+            $where[]   = '1=1'; // placeholder for prepare
+            $limit_sql = 'LIMIT %d OFFSET %d';
+            $prepare[] = absint( $args['limite'] );
+            $prepare[] = absint( $args['offset'] );
+            // Remove the placeholder
+            array_pop( $where );
         }
 
-        $query = "SELECT p.* FROM {$this->table('proyectos')} p WHERE {$where_sql} ORDER BY {$orderby} {$order} {$limit_sql}";
+        // Rebuild where_sql after limit adjustments
+        $where_sql = ! empty( $where ) ? 'WHERE ' . implode( ' AND ', $where ) : '';
+
+        $query = "SELECT p.* FROM {$this->table('proyectos')} p {$where_sql} ORDER BY {$orderby} {$order}";
+        if ( ! empty( $limit_sql ) ) {
+            $query .= " {$limit_sql}";
+        }
 
         if ( ! empty( $prepare ) ) {
             $query = $wpdb->prepare( $query, ...$prepare ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
@@ -417,7 +454,6 @@ class SGR_Suite_Database {
             return [];
         }
 
-        // Cargar relaciones
         foreach ( $proyectos as &$proyecto ) {
             $pid = (int) $proyecto['id'];
             $proyecto['metas']     = $this->get_metas_proyecto( $pid );
@@ -427,13 +463,10 @@ class SGR_Suite_Database {
         return $proyectos;
     }
 
-    /**
-     * Contar total de proyectos (para paginación).
-     */
     public function count_proyectos( array $args = [] ): int {
         global $wpdb;
 
-        $where   = [ '1=1' ];
+        $where   = [];
         $prepare = [];
 
         if ( ! empty( $args['buscar'] ) ) {
@@ -442,19 +475,17 @@ class SGR_Suite_Database {
             $prepare[] = $like;
             $prepare[] = $like;
         }
-
         if ( ! empty( $args['dependencia'] ) ) {
             $where[]   = 'p.dependencia_proyecto = %s';
             $prepare[] = sanitize_text_field( $args['dependencia'] );
         }
-
         if ( ! empty( $args['entidad'] ) ) {
             $where[]   = 'p.entidad_ejecutora_proyecto = %s';
             $prepare[] = sanitize_text_field( $args['entidad'] );
         }
 
-        $where_sql = implode( ' AND ', $where );
-        $query     = "SELECT COUNT(*) FROM {$this->table('proyectos')} p WHERE {$where_sql}";
+        $where_sql = ! empty( $where ) ? 'WHERE ' . implode( ' AND ', $where ) : '';
+        $query     = "SELECT COUNT(*) FROM {$this->table('proyectos')} p {$where_sql}";
 
         if ( ! empty( $prepare ) ) {
             $query = $wpdb->prepare( $query, ...$prepare ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
@@ -463,31 +494,18 @@ class SGR_Suite_Database {
         return (int) $wpdb->get_var( $query ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
     }
 
-    /**
-     * Obtener metas de un proyecto.
-     */
     public function get_metas_proyecto( int $proyecto_id ): array {
         global $wpdb;
-
         return $wpdb->get_col(
-            $wpdb->prepare(
-                "SELECT descripcion_meta FROM {$this->table('metas')} WHERE proyecto_id = %d ORDER BY id ASC",
-                $proyecto_id
-            )
+            $wpdb->prepare( "SELECT descripcion_meta FROM {$this->table('metas')} WHERE proyecto_id = %d ORDER BY id", $proyecto_id )
         );
     }
 
-    /**
-     * Obtener contratos de un proyecto con sus relaciones.
-     */
     public function get_contratos_proyecto( int $proyecto_id ): array {
         global $wpdb;
 
         $contratos = $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$this->table('contratos')} WHERE proyecto_id = %d ORDER BY id ASC",
-                $proyecto_id
-            ),
+            $wpdb->prepare( "SELECT * FROM {$this->table('contratos')} WHERE proyecto_id = %d ORDER BY id", $proyecto_id ),
             ARRAY_A
         );
 
@@ -495,59 +513,38 @@ class SGR_Suite_Database {
             return [];
         }
 
-        foreach ( $contratos as &$contrato ) {
-            $cid = (int) $contrato['id'];
-            $contrato['municipios'] = $this->get_municipios_contrato( $cid );
-            $contrato['imagenes']   = $this->get_imagenes_contrato( $cid );
+        foreach ( $contratos as &$c ) {
+            $cid = (int) $c['id'];
+            $c['municipios'] = $this->get_municipios_contrato( $cid );
+            $c['imagenes']   = $this->get_imagenes_contrato( $cid );
         }
 
         return $contratos;
     }
 
-    /**
-     * Obtener municipios de un contrato.
-     */
     public function get_municipios_contrato( int $contrato_id ): array {
         global $wpdb;
-
         return $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT nombre, poblacion_beneficiada FROM {$this->table('municipios')} WHERE contrato_id = %d ORDER BY nombre ASC",
-                $contrato_id
-            ),
+            $wpdb->prepare( "SELECT nombre, poblacion_beneficiada FROM {$this->table('municipios')} WHERE contrato_id = %d ORDER BY nombre", $contrato_id ),
             ARRAY_A
         );
     }
 
-    /**
-     * Obtener imágenes de un contrato.
-     */
     public function get_imagenes_contrato( int $contrato_id ): array {
         global $wpdb;
-
         return $wpdb->get_col(
-            $wpdb->prepare(
-                "SELECT url_imagen FROM {$this->table('imagenes')} WHERE contrato_id = %d ORDER BY id ASC",
-                $contrato_id
-            )
+            $wpdb->prepare( "SELECT url_imagen FROM {$this->table('imagenes')} WHERE contrato_id = %d ORDER BY id", $contrato_id )
         );
     }
 
-    /**
-     * Estadísticas generales.
-     */
     public function get_stats(): array {
         global $wpdb;
 
-        $total_proyectos = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table('proyectos')}" );
-        $total_contratos = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table('contratos')}" );
-        $total_valor     = (float) $wpdb->get_var( "SELECT COALESCE(SUM(valor_proyecto), 0) FROM {$this->table('proyectos')}" );
-        $total_metas     = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table('metas')}" );
+        $total_proyectos  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table('proyectos')}" );
+        $total_contratos  = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table('contratos')}" );
+        $total_valor      = (float) $wpdb->get_var( "SELECT COALESCE(SUM(valor_proyecto), 0) FROM {$this->table('proyectos')}" );
+        $total_metas      = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table('metas')}" );
         $total_municipios = (int) $wpdb->get_var( "SELECT COUNT(DISTINCT nombre) FROM {$this->table('municipios')}" );
-
-        $municipios_lista = $wpdb->get_col( "SELECT DISTINCT nombre FROM {$this->table('municipios')} ORDER BY nombre ASC" );
-        $dependencias     = $wpdb->get_col( "SELECT DISTINCT dependencia_proyecto FROM {$this->table('proyectos')} WHERE dependencia_proyecto != '' ORDER BY dependencia_proyecto ASC" );
-        $entidades        = $wpdb->get_col( "SELECT DISTINCT entidad_ejecutora_proyecto FROM {$this->table('proyectos')} WHERE entidad_ejecutora_proyecto != '' ORDER BY entidad_ejecutora_proyecto ASC" );
 
         return [
             'totalProyectos'  => $total_proyectos,
@@ -555,23 +552,17 @@ class SGR_Suite_Database {
             'totalValor'      => $total_valor,
             'totalMetas'      => $total_metas,
             'totalMunicipios' => $total_municipios,
-            'municipios'      => $municipios_lista,
-            'dependencias'    => $dependencias,
-            'entidades'       => $entidades,
+            'municipios'      => $wpdb->get_col( "SELECT DISTINCT nombre FROM {$this->table('municipios')} ORDER BY nombre" ),
+            'dependencias'    => $wpdb->get_col( "SELECT DISTINCT dependencia_proyecto FROM {$this->table('proyectos')} WHERE dependencia_proyecto != '' ORDER BY dependencia_proyecto" ),
+            'entidades'       => $wpdb->get_col( "SELECT DISTINCT entidad_ejecutora_proyecto FROM {$this->table('proyectos')} WHERE entidad_ejecutora_proyecto != '' ORDER BY entidad_ejecutora_proyecto" ),
         ];
     }
 
-    /**
-     * Obtener un proyecto por BPIN.
-     */
     public function get_proyecto_by_bpin( string $bpin ): ?array {
         global $wpdb;
 
         $proyecto = $wpdb->get_row(
-            $wpdb->prepare(
-                "SELECT * FROM {$this->table('proyectos')} WHERE numero_proyecto = %s",
-                sanitize_text_field( $bpin )
-            ),
+            $wpdb->prepare( "SELECT * FROM {$this->table('proyectos')} WHERE numero_proyecto = %s", sanitize_text_field( $bpin ) ),
             ARRAY_A
         );
 
@@ -586,11 +577,143 @@ class SGR_Suite_Database {
         return $proyecto;
     }
 
-    /**
-     * Última importación.
-     */
     public function get_last_import_date(): ?string {
         global $wpdb;
         return $wpdb->get_var( "SELECT MAX(fecha_importacion) FROM {$this->table('proyectos')}" );
+    }
+
+    // =========================================================================
+    // CONSULTAS PARA GRÁFICOS (con soporte de JOINs)
+    // =========================================================================
+
+    /**
+     * Vistas predefinidas para gráficos con JOINs entre tablas.
+     *
+     * @return array<string, array{label: string, sql: string, columns: string[]}>
+     */
+    public function get_chart_views(): array {
+        return [
+            'proyectos' => [
+                'label'   => 'Proyectos',
+                'sql'     => "SELECT * FROM {$this->table('proyectos')}",
+                'columns' => [
+                    'numero_proyecto', 'nombre_proyecto', 'valor_proyecto',
+                    'dependencia_proyecto', 'entidad_ejecutora_proyecto', 'total_contratos',
+                ],
+            ],
+            'contratos' => [
+                'label'   => 'Contratos',
+                'sql'     => "SELECT * FROM {$this->table('contratos')}",
+                'columns' => [
+                    'numero_contrato', 'valor_contrato', 'porcentaje_avance_fisico',
+                    'es_ops_ejec_contractual', 'proyecto_id',
+                ],
+            ],
+            'valor_por_dependencia' => [
+                'label'   => 'Valor por Dependencia',
+                'sql'     => "SELECT dependencia_proyecto AS label, SUM(valor_proyecto) AS value, COUNT(*) AS count
+                              FROM {$this->table('proyectos')}
+                              WHERE dependencia_proyecto != ''
+                              GROUP BY dependencia_proyecto",
+                'columns' => [ 'label', 'value', 'count' ],
+            ],
+            'valor_por_entidad' => [
+                'label'   => 'Valor por Entidad Ejecutora',
+                'sql'     => "SELECT entidad_ejecutora_proyecto AS label, SUM(valor_proyecto) AS value, COUNT(*) AS count
+                              FROM {$this->table('proyectos')}
+                              WHERE entidad_ejecutora_proyecto != ''
+                              GROUP BY entidad_ejecutora_proyecto",
+                'columns' => [ 'label', 'value', 'count' ],
+            ],
+            'valor_por_municipio' => [
+                'label'   => 'Inversión por Municipio',
+                'sql'     => "SELECT m.nombre AS label, SUM(c.valor_contrato) AS value, COUNT(DISTINCT c.id) AS count
+                              FROM {$this->table('municipios')} m
+                              INNER JOIN {$this->table('contratos')} c ON m.contrato_id = c.id
+                              GROUP BY m.nombre",
+                'columns' => [ 'label', 'value', 'count' ],
+            ],
+            'poblacion_por_municipio' => [
+                'label'   => 'Población Beneficiada por Municipio',
+                'sql'     => "SELECT m.nombre AS label, SUM(m.poblacion_beneficiada) AS value
+                              FROM {$this->table('municipios')} m
+                              GROUP BY m.nombre",
+                'columns' => [ 'label', 'value' ],
+            ],
+            'contratos_por_dependencia' => [
+                'label'   => 'Contratos por Dependencia',
+                'sql'     => "SELECT p.dependencia_proyecto AS label, COUNT(c.id) AS value, SUM(c.valor_contrato) AS total_valor
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY p.dependencia_proyecto",
+                'columns' => [ 'label', 'value', 'total_valor' ],
+            ],
+            'avance_promedio_por_dependencia' => [
+                'label'   => 'Avance Físico Promedio por Dependencia',
+                'sql'     => "SELECT p.dependencia_proyecto AS label, AVG(c.porcentaje_avance_fisico) AS value
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY p.dependencia_proyecto",
+                'columns' => [ 'label', 'value' ],
+            ],
+            'metas_por_dependencia' => [
+                'label'   => 'Metas por Dependencia',
+                'sql'     => "SELECT p.dependencia_proyecto AS label, COUNT(mt.id) AS value
+                              FROM {$this->table('metas')} mt
+                              INNER JOIN {$this->table('proyectos')} p ON mt.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY p.dependencia_proyecto",
+                'columns' => [ 'label', 'value' ],
+            ],
+            'top_proyectos_valor' => [
+                'label'   => 'Top Proyectos por Valor',
+                'sql'     => "SELECT CONCAT(numero_proyecto, ' - ', LEFT(nombre_proyecto, 60)) AS label, valor_proyecto AS value
+                              FROM {$this->table('proyectos')}
+                              WHERE valor_proyecto > 0
+                              ORDER BY valor_proyecto DESC",
+                'columns' => [ 'label', 'value' ],
+            ],
+            'municipios_por_proyecto' => [
+                'label'   => 'Municipios por Proyecto (Top)',
+                'sql'     => "SELECT CONCAT(p.numero_proyecto, ' - ', LEFT(p.nombre_proyecto, 40)) AS label,
+                                     COUNT(DISTINCT m.nombre) AS value
+                              FROM {$this->table('proyectos')} p
+                              INNER JOIN {$this->table('contratos')} c ON c.proyecto_id = p.id
+                              INNER JOIN {$this->table('municipios')} m ON m.contrato_id = c.id
+                              GROUP BY p.id, p.numero_proyecto, p.nombre_proyecto",
+                'columns' => [ 'label', 'value' ],
+            ],
+        ];
+    }
+
+    /**
+     * Ejecutar una vista de gráfico predefinida con límite opcional.
+     */
+    public function execute_chart_view( string $view_key, int $limit = 20, string $order_dir = 'DESC' ): array {
+        global $wpdb;
+
+        $views = $this->get_chart_views();
+        if ( ! isset( $views[ $view_key ] ) ) {
+            return [];
+        }
+
+        $view = $views[ $view_key ];
+        $sql  = $view['sql'];
+
+        $order_dir = strtoupper( $order_dir ) === 'ASC' ? 'ASC' : 'DESC';
+
+        // Solo agregar ORDER BY si la vista no lo tiene ya
+        if ( stripos( $sql, 'ORDER BY' ) === false ) {
+            $sql .= " ORDER BY value {$order_dir}";
+        }
+
+        $limit = min( max( 1, $limit ), 500 );
+        $sql  .= $wpdb->prepare( ' LIMIT %d', $limit );
+
+        $results = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+        return is_array( $results ) ? $results : [];
     }
 }

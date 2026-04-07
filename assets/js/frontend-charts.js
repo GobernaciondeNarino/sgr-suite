@@ -1,16 +1,25 @@
 /**
- * SGR Suite - Frontend Charts JS
+ * SGR Suite - Frontend Charts JS v2.0.0
  *
- * Renderizado de gráficos con D3Plus, lazy loading via
- * IntersectionObserver, toolbar, modal de datos y export CSV.
+ * Renders charts with D3Plus v2 using the correct method-chaining API.
+ * Features: lazy loading via IntersectionObserver, toolbar actions
+ * (fullscreen, data modal, CSV export).
+ *
+ * D3Plus v2 classes used:
+ *   d3plus.BarChart, d3plus.LinePlot, d3plus.Pie,
+ *   d3plus.Treemap, d3plus.Pack
+ *
+ * Data format from AJAX: [{label: "...", value: 123}, ...]
  *
  * @package SGR_Suite
- * @since   1.0.1
+ * @since   2.0.0
  */
 (function () {
     'use strict';
 
-    // --- Utilidades ---
+    /* =========================================
+       Utilities
+       ========================================= */
 
     function escapeHtml(text) {
         if (!text) return '';
@@ -25,14 +34,20 @@
 
         switch (format) {
             case 'colombiano':
-                return num.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                return num.toLocaleString('es-CO', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                });
             case 'millones':
                 if (Math.abs(num) >= 1e9) return (num / 1e9).toFixed(1) + ' MMll';
                 if (Math.abs(num) >= 1e6) return (num / 1e6).toFixed(1) + 'M';
                 if (Math.abs(num) >= 1e3) return (num / 1e3).toFixed(1) + 'K';
                 return num.toLocaleString('es-CO');
             case 'internacional':
-                return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                return num.toLocaleString('en-US', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                });
             case 'sin_formato':
                 return String(num);
             default:
@@ -41,36 +56,41 @@
     }
 
     /**
-     * Resolver clase D3Plus por tipo de gráfico.
+     * Build a stable color assignment function from a palette.
+     * Maps each unique label/series to a color, reusing across renders.
      */
-    function getD3PlusClass(chartType) {
-        var d3p = window.d3plus || {};
-
-        var mapping = {
-            'bar':         d3p.BarChart,
-            'stacked_bar': d3p.StackedArea, // fallback, D3Plus v2
-            'grouped_bar': d3p.BarChart,
-            'line':        d3p.LinePlot,
-            'area':        d3p.StackedArea,
-            'pie':         d3p.Pie,
-            'donut':       d3p.Donut,
-            'treemap':     d3p.Treemap,
-            'pack':        d3p.Pack
+    function makeColorFn(colors) {
+        var palette = (colors && colors.length)
+            ? colors
+            : ['#348afb', '#1e40af', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#ca8a04'];
+        var map = {};
+        var idx = 0;
+        return function (d) {
+            var key = d.label || d.series || 'default';
+            if (!(key in map)) {
+                map[key] = palette[idx % palette.length];
+                idx++;
+            }
+            return map[key];
         };
-
-        return mapping[chartType] || d3p.BarChart;
     }
 
-    // --- ChartManager ---
+    /* =========================================
+       ChartManager
+       ========================================= */
 
     var ChartManager = {
         charts: {},
 
+        /**
+         * Find all .sgr-chart-wrapper elements and lazy-load them.
+         * Set up event delegation for toolbar and modal close.
+         */
         init: function () {
             var wrappers = document.querySelectorAll('.sgr-chart-wrapper');
             if (!wrappers.length) return;
 
-            // Lazy load con IntersectionObserver
+            // Lazy load with IntersectionObserver
             if ('IntersectionObserver' in window) {
                 var observer = new IntersectionObserver(function (entries) {
                     entries.forEach(function (entry) {
@@ -81,17 +101,17 @@
                     });
                 }, { rootMargin: '200px' });
 
-                wrappers.forEach(function (wrapper) {
-                    observer.observe(wrapper);
+                wrappers.forEach(function (w) {
+                    observer.observe(w);
                 });
             } else {
-                // Fallback sin IO
-                wrappers.forEach(function (wrapper) {
-                    ChartManager.loadChart(wrapper);
+                // Fallback: load all immediately
+                wrappers.forEach(function (w) {
+                    ChartManager.loadChart(w);
                 });
             }
 
-            // Event delegation para toolbar
+            // Toolbar button delegation
             document.addEventListener('click', function (e) {
                 var btn = e.target.closest('.sgr-chart-toolbar-btn');
                 if (!btn) return;
@@ -107,18 +127,21 @@
                 if (action === 'download') ChartManager.downloadCSV(uid);
             });
 
-            // Cerrar modales
+            // Close data modals via close button or backdrop click
             document.addEventListener('click', function (e) {
                 if (e.target.classList.contains('sgr-chart-data-modal-close')) {
                     var modal = e.target.closest('.sgr-chart-data-modal');
-                    if (modal) modal.style.display = 'none';
+                    if (modal) modal.classList.remove('show');
                 }
                 if (e.target.classList.contains('sgr-chart-data-modal')) {
-                    e.target.style.display = 'none';
+                    e.target.classList.remove('show');
                 }
             });
         },
 
+        /**
+         * Read JSON config from script tag, fetch data via AJAX POST, then render.
+         */
         loadChart: function (wrapper) {
             var uid = wrapper.id;
             var configEl = document.getElementById(uid + '-config');
@@ -128,21 +151,21 @@
             try {
                 parsed = JSON.parse(configEl.textContent);
             } catch (e) {
-                this.showError(uid, 'Error al leer la configuración del gráfico.');
+                this.showError(uid, 'Error al leer la configuracion del grafico.');
                 return;
             }
 
             var chartId = parsed.chartId;
             var nonce = parsed.nonce;
-            var config = parsed.config;
 
-            // AJAX para obtener datos
             var formData = new FormData();
             formData.append('action', 'sgr_suite_get_chart_data');
             formData.append('chart_id', chartId);
             formData.append('nonce', nonce);
 
-            var ajaxUrl = (typeof sgrCharts !== 'undefined') ? sgrCharts.ajaxUrl : '/wp-admin/admin-ajax.php';
+            var ajaxUrl = (typeof window.sgrCharts !== 'undefined' && window.sgrCharts.ajaxUrl)
+                ? window.sgrCharts.ajaxUrl
+                : '/wp-admin/admin-ajax.php';
 
             fetch(ajaxUrl, {
                 method: 'POST',
@@ -152,7 +175,12 @@
             .then(function (resp) { return resp.json(); })
             .then(function (response) {
                 if (!response.success) {
-                    ChartManager.showError(uid, response.data?.message || 'Error al cargar datos.');
+                    ChartManager.showError(
+                        uid,
+                        (response.data && response.data.message)
+                            ? response.data.message
+                            : 'Error al cargar datos.'
+                    );
                     return;
                 }
 
@@ -166,130 +194,240 @@
 
                 ChartManager.renderChart(uid, data, serverConfig);
             })
-            .catch(function (err) {
-                ChartManager.showError(uid, 'Error de conexión al cargar el gráfico.');
+            .catch(function () {
+                ChartManager.showError(uid, 'Error de conexion al cargar el grafico.');
             });
         },
 
+        /**
+         * Render chart using D3Plus v2 method-chaining API.
+         *
+         * Supported chart_type values:
+         *   bar, barH, stacked, line, pie, donut, treemap, pack
+         */
         renderChart: function (uid, data, config) {
             var container = document.getElementById(uid + '-container');
             if (!container || !data || !data.length) {
-                this.showError(uid, 'No hay datos disponibles para este gráfico.');
+                this.showError(uid, 'No hay datos disponibles para este grafico.');
                 return;
             }
 
-            // Limpiar loading
+            // Clear loading spinner
             container.innerHTML = '';
 
-            var chartType = config.chart_type || 'bar';
-            var ChartClass = getD3PlusClass(chartType);
-
-            if (!ChartClass) {
-                this.showError(uid, 'Tipo de gráfico no soportado o D3Plus no cargado.');
+            var d3p = window.d3plus;
+            if (!d3p) {
+                this.showError(uid, 'D3Plus no esta cargado.');
                 return;
             }
 
+            var chartType = config.chart_type || 'bar';
             var numFormat = config.number_format || 'colombiano';
-            var colors = config.colors || ['#348afb', '#1e40af', '#059669', '#d97706'];
+            var colors = config.colors || ['#348afb', '#1e40af', '#059669', '#d97706', '#dc2626', '#7c3aed'];
+            var colorFn = makeColorFn(colors);
+            var selector = '#' + uid + '-container';
 
-            // Preparar datos - verificar si hay series
-            var hasSeries = data.length > 0 && data[0].series !== undefined;
+            // Ensure numeric values are numbers, not strings from JSON
+            data.forEach(function (d) {
+                if (d.value !== undefined) d.value = parseFloat(d.value) || 0;
+            });
+
+            var tooltipCfg = {
+                body: function (d) {
+                    return formatNumber(d.value, numFormat);
+                }
+            };
 
             try {
-                var chartConfig = {
-                    select: '#' + uid + '-container',
-                    data: data,
-                    groupBy: hasSeries ? 'series' : 'label',
-                    tooltipConfig: {
-                        body: function (d) {
-                            return formatNumber(d.value, numFormat);
-                        }
-                    },
-                    shapeConfig: {
-                        fill: function (d, i) {
-                            return colors[i % colors.length];
-                        }
-                    }
-                };
+                var chart;
 
-                // Configurar según tipo
-                if (['bar', 'stacked_bar', 'grouped_bar'].indexOf(chartType) !== -1) {
-                    chartConfig.x = 'label';
-                    chartConfig.y = 'value';
-                    if (chartType === 'grouped_bar') {
-                        chartConfig.grouped = true;
-                    }
-                    if (chartType === 'stacked_bar') {
-                        chartConfig.stacked = true;
-                    }
-                } else if (chartType === 'line' || chartType === 'area') {
-                    chartConfig.x = 'label';
-                    chartConfig.y = 'value';
-                    chartConfig.groupBy = hasSeries ? 'series' : undefined;
-                } else if (chartType === 'pie' || chartType === 'donut') {
-                    chartConfig.value = 'value';
-                    chartConfig.groupBy = 'label';
-                } else if (chartType === 'treemap') {
-                    chartConfig.sum = 'value';
-                    chartConfig.groupBy = 'label';
-                } else if (chartType === 'pack') {
-                    chartConfig.sum = 'value';
-                    chartConfig.groupBy = 'label';
+                switch (chartType) {
+
+                    // ── Vertical bar ──
+                    case 'bar':
+                        chart = new d3p.BarChart()
+                            .select(selector)
+                            .data(data)
+                            .x('label')
+                            .y('value')
+                            .groupBy('label')
+                            .shapeConfig({ fill: colorFn })
+                            .tooltipConfig(tooltipCfg);
+                        break;
+
+                    // ── Horizontal bar ──
+                    case 'barH':
+                        chart = new d3p.BarChart()
+                            .select(selector)
+                            .data(data)
+                            .x('value')
+                            .y('label')
+                            .discrete('y')
+                            .groupBy('label')
+                            .shapeConfig({ fill: colorFn })
+                            .tooltipConfig(tooltipCfg);
+                        break;
+
+                    // ── Stacked bar (requires series field) ──
+                    case 'stacked':
+                        chart = new d3p.BarChart()
+                            .select(selector)
+                            .data(data)
+                            .x('label')
+                            .y('value')
+                            .groupBy('series')
+                            .stacked(true)
+                            .shapeConfig({ fill: colorFn })
+                            .tooltipConfig(tooltipCfg);
+                        break;
+
+                    // ── Line plot ──
+                    case 'line':
+                        chart = new d3p.LinePlot()
+                            .select(selector)
+                            .data(data)
+                            .x('label')
+                            .y('value')
+                            .groupBy(function () { return 'Valor'; })
+                            .shapeConfig({
+                                Line: { stroke: colors[0] || '#348afb', strokeWidth: 3 }
+                            })
+                            .tooltipConfig(tooltipCfg);
+                        break;
+
+                    // ── Pie ──
+                    case 'pie':
+                        chart = new d3p.Pie()
+                            .select(selector)
+                            .data(data)
+                            .groupBy('label')
+                            .value(function (d) { return d.value; })
+                            .shapeConfig({ fill: colorFn })
+                            .tooltipConfig(tooltipCfg);
+                        break;
+
+                    // ── Donut (Pie with innerRadius) ──
+                    case 'donut':
+                        chart = new d3p.Pie()
+                            .select(selector)
+                            .data(data)
+                            .groupBy('label')
+                            .value(function (d) { return d.value; })
+                            .innerRadius(function () {
+                                var el = document.querySelector(selector);
+                                if (!el) return 80;
+                                var size = Math.min(el.clientWidth, el.clientHeight);
+                                return Math.max(40, size * 0.2);
+                            })
+                            .shapeConfig({ fill: colorFn })
+                            .tooltipConfig(tooltipCfg);
+                        break;
+
+                    // ── Treemap ──
+                    case 'treemap':
+                        chart = new d3p.Treemap()
+                            .select(selector)
+                            .data(data)
+                            .groupBy('label')
+                            .sum('value')
+                            .shapeConfig({ fill: colorFn })
+                            .tooltipConfig(tooltipCfg);
+                        break;
+
+                    // ── Pack / Bubble ──
+                    case 'pack':
+                        chart = new d3p.Pack()
+                            .select(selector)
+                            .data(data)
+                            .groupBy('label')
+                            .sum('value')
+                            .shapeConfig({ fill: colorFn })
+                            .tooltipConfig(tooltipCfg);
+                        break;
+
+                    // ── Fallback ──
+                    default:
+                        chart = new d3p.BarChart()
+                            .select(selector)
+                            .data(data)
+                            .x('label')
+                            .y('value')
+                            .groupBy('label')
+                            .shapeConfig({ fill: colorFn })
+                            .tooltipConfig(tooltipCfg);
+                        break;
                 }
 
-                // Leyenda
-                if (config.show_legend === false) {
-                    chartConfig.legend = false;
+                // Legend toggle
+                if (config.show_legend === false && typeof chart.legend === 'function') {
+                    chart.legend(false);
                 }
 
-                // Títulos de ejes
-                if (config.x_axis_title) {
-                    chartConfig.xConfig = chartConfig.xConfig || {};
-                    chartConfig.xConfig.title = config.x_axis_title;
+                // Axis titles (only on chart types that support them)
+                if (config.x_axis_title && typeof chart.xConfig === 'function') {
+                    chart.xConfig({ title: config.x_axis_title });
                 }
-                if (config.y_axis_title) {
-                    chartConfig.yConfig = chartConfig.yConfig || {};
-                    chartConfig.yConfig.title = config.y_axis_title;
+                if (config.y_axis_title && typeof chart.yConfig === 'function') {
+                    chart.yConfig({ title: config.y_axis_title });
                 }
 
-                new ChartClass(chartConfig).render();
+                // Custom height
+                if (config.chart_height && typeof chart.height === 'function') {
+                    chart.height(parseInt(config.chart_height, 10));
+                }
+
+                chart.render();
 
             } catch (e) {
                 console.error('SGR Chart render error:', e);
-                this.showError(uid, 'Error al renderizar el gráfico: ' + e.message);
+                this.showError(uid, 'Error al renderizar el grafico: ' + e.message);
             }
         },
 
+        /**
+         * Display error message inside chart container.
+         */
         showError: function (uid, message) {
             var container = document.getElementById(uid + '-container');
             if (container) {
-                container.innerHTML = '<div class="sgr-chart-error">' +
-                    '<p>' + escapeHtml(message) + '</p></div>';
+                container.innerHTML = '<div class="sgr-chart-error"><p>' +
+                    escapeHtml(message) + '</p></div>';
             }
         },
 
+        /**
+         * Toggle Fullscreen API on the chart wrapper element.
+         */
         toggleFullscreen: function (wrapper) {
             if (!document.fullscreenElement) {
-                wrapper.requestFullscreen().catch(function () {});
+                if (wrapper.requestFullscreen) {
+                    wrapper.requestFullscreen().catch(function () {});
+                } else if (wrapper.webkitRequestFullscreen) {
+                    wrapper.webkitRequestFullscreen();
+                }
             } else {
-                document.exitFullscreen();
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
             }
         },
 
+        /**
+         * Populate the data table inside the modal and show it.
+         */
         showDataModal: function (uid) {
             var modal = document.getElementById(uid + '-data-modal');
             var chartData = this.charts[uid];
-            if (!modal || !chartData) return;
+            if (!modal || !chartData || !chartData.data || !chartData.data.length) return;
+
+            var data = chartData.data;
+            var keys = Object.keys(data[0]);
+            var numFormat = chartData.config.number_format || 'colombiano';
 
             var thead = modal.querySelector('thead');
             var tbody = modal.querySelector('tbody');
-
-            // Construir tabla
-            var data = chartData.data;
-            if (!data.length) return;
-
-            var keys = Object.keys(data[0]);
-            var numFormat = chartData.config.number_format || 'colombiano';
 
             thead.innerHTML = '<tr>' + keys.map(function (k) {
                 return '<th>' + escapeHtml(k) + '</th>';
@@ -301,25 +439,30 @@
                     if (k === 'value' && !isNaN(val)) {
                         val = formatNumber(val, numFormat);
                     }
-                    return '<td>' + escapeHtml(String(val ?? '')) + '</td>';
+                    return '<td>' + escapeHtml(String(val != null ? val : '')) + '</td>';
                 }).join('') + '</tr>';
             }).join('');
 
-            modal.style.display = 'flex';
+            modal.classList.add('show');
         },
 
+        /**
+         * Generate a CSV blob from chart data and trigger a download.
+         */
         downloadCSV: function (uid) {
             var chartData = this.charts[uid];
-            if (!chartData || !chartData.data.length) return;
+            if (!chartData || !chartData.data || !chartData.data.length) return;
 
             var data = chartData.data;
             var keys = Object.keys(data[0]);
 
-            var csv = '\uFEFF'; // BOM
+            // UTF-8 BOM for Excel compatibility
+            var csv = '\uFEFF';
             csv += keys.join(',') + '\n';
+
             data.forEach(function (row) {
                 csv += keys.map(function (k) {
-                    var val = String(row[k] ?? '');
+                    var val = String(row[k] != null ? row[k] : '');
                     return '"' + val.replace(/"/g, '""') + '"';
                 }).join(',') + '\n';
             });
@@ -329,12 +472,17 @@
             var a = document.createElement('a');
             a.href = url;
             a.download = 'sgr-chart-' + uid + '.csv';
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
     };
 
-    // Inicializar cuando el DOM esté listo
+    /* =========================================
+       Initialize on DOM ready
+       ========================================= */
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
             ChartManager.init();

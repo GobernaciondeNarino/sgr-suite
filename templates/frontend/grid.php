@@ -14,7 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-$plugin = sgr_suite();
+$plugin       = sgr_suite();
+$card_settings = $plugin->card_customizer->get_settings();
 
 // Obtener datos desde la BD local
 $stats = $plugin->database->get_stats();
@@ -150,7 +151,7 @@ foreach ( $proyectos as $index => $p ) {
         <div class="regalias-grid-proyectos" id="regalias-grid-proyectos">
             <?php foreach ( $proyectos as $index => $proyecto ) :
                 $num_contratos   = (int) $proyecto['total_contratos'];
-                $imagen_card     = SGR_SUITE_DEFAULT_IMAGE;
+                $imagen_card     = $card_settings['image_default_url'] ?? SGR_SUITE_DEFAULT_IMAGE;
                 $municipios_text = '';
 
                 // Primera imagen de contratos

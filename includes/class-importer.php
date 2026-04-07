@@ -214,6 +214,9 @@ class SGR_Suite_Importer {
 
         delete_transient( self::TRANSIENT_LOCK );
 
+        // Limpiar caches de gráficos tras importación
+        $this->database->clear_chart_caches();
+
         $this->logger->info( "Importación completada: {$imported} proyectos importados, {$errors} errores." );
 
         return [
