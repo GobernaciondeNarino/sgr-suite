@@ -177,98 +177,160 @@
         bindPreviewButton: function () {
             var self = this;
 
-            $('#sgr-btn-preview').on('click', function () {
-                var $btn = $(this);
-                var dataView = $('#sgr-data-view').val();
-                var limit = $('#sgr-limit').val() || 20;
-                var orderDir = $('select[name="sgr_chart[order_dir]"]').val()
-                    || $('#sgr-order-dir').val()
-                    || 'DESC';
+            // Si el usuario cambia cualquier control relevante, rehacemos
+            // automáticamente la vista previa. Debounced para evitar spam.
+            var debouncedRefresh = self._debounce(function () {
+                self.refreshPreview();
+            }, 350);
+            $(document).on(
+                'change input',
+                '#sgr-data-view, #sgr-limit, #sgr-order-dir, #sgr-chart-height, ' +
+                '#sgr-number-format, #sgr-colors, #sgr-legend-mode, ' +
+                '#sgr-x-labels-rotate, #sgr-x-labels-size, ' +
+                'input[name="sgr_chart[chart_type]"], ' +
+                'input[name="sgr_chart[x_labels_visible]"], ' +
+                'input[name="sgr_chart[show_legend]"]',
+                debouncedRefresh
+            );
 
-                if (!dataView) {
-                    $('#sgr-chart-preview-area').html(
-                        '<p style="text-align:center;color:#d63638;padding:15px;">Selecciona una vista de datos primero.</p>'
-                    );
-                    return;
-                }
+            $('#sgr-btn-preview').on('click', function (e) {
+                e.preventDefault();
+                self.refreshPreview(true);
+            });
 
+            // Auto-ejecutar un primer render al cargar la página si ya
+            // existe una vista seleccionada (edición de un chart ya guardado).
+            if ($('#sgr-data-view').length && $('#sgr-data-view').val()) {
+                setTimeout(function () { self.refreshPreview(); }, 250);
+            }
+        },
+
+        /**
+         * Pequeño debouncer sin dependencias externas.
+         */
+        _debounce: function (fn, ms) {
+            var t;
+            return function () {
+                var ctx = this, args = arguments;
+                clearTimeout(t);
+                t = setTimeout(function () { fn.apply(ctx, args); }, ms);
+            };
+        },
+
+        /**
+         * Reúne la configuración actual del formulario, llama al endpoint
+         * AJAX de preview y dibuja el gráfico real con window.SGRChart.render().
+         */
+        refreshPreview: function (explicit) {
+            var self = this;
+            var $btn = $('#sgr-btn-preview');
+            var $area = $('#sgr-chart-preview-area');
+            if (!$area.length) return;
+
+            var formData = self._collectConfig();
+            if (!formData.data_view) {
+                $area.html(
+                    '<p style="text-align:center;color:#d63638;padding:15px;">Selecciona una vista de datos primero.</p>'
+                );
+                return;
+            }
+
+            // Mostrar un mini spinner sin destruir el área (para evitar
+            // flicker cuando el render es rápido).
+            if (explicit) {
                 $btn.prop('disabled', true).text('Cargando...');
+            }
+            if (!$area.find('.sgr-preview-loading').length) {
+                $area.html('<div class="sgr-preview-loading" style="padding:40px;text-align:center;color:#64748b;">' +
+                    '<span class="spinner is-active" style="float:none;margin:0 8px 0 0;"></span>' +
+                    'Generando vista previa…</div>');
+            }
 
-                $.ajax({
-                    url: sgrChartsAdmin.ajaxUrl,
-                    method: 'POST',
-                    data: {
-                        action: 'sgr_suite_preview_chart_data',
-                        nonce: sgrChartsAdmin.nonce,
-                        data_view: dataView,
-                        limit: limit,
-                        order_dir: orderDir
-                    },
-                    success: function (response) {
-                        $btn.prop('disabled', false).text('Actualizar Vista Previa');
+            $.ajax({
+                url: sgrChartsAdmin.ajaxUrl,
+                method: 'POST',
+                data: $.extend({
+                    action: 'sgr_suite_preview_chart_data',
+                    nonce:  sgrChartsAdmin.nonce
+                }, formData),
+                success: function (response) {
+                    $btn.prop('disabled', false).text('Actualizar Vista Previa');
 
-                        if (response.success) {
-                            var count = response.data.count || 0;
-                            var records = response.data.data || [];
-                            var html = '';
+                    if (!response.success) {
+                        var errMsg = (response.data && response.data.message)
+                            ? response.data.message
+                            : 'Error al obtener datos';
+                        $area.html(
+                            '<p style="text-align:center;color:#d63638;padding:15px;">' +
+                            self.escapeHtml(errMsg) + '</p>'
+                        );
+                        return;
+                    }
 
-                            html += '<div style="text-align:center;padding:15px;">';
-                            html += '<div style="font-size:28px;font-weight:900;color:#334155;">' + count + '</div>';
-                            html += '<div style="font-size:12px;color:#666;text-transform:uppercase;font-weight:600;">Registros encontrados</div>';
-                            html += '</div>';
+                    var payload  = response.data || {};
+                    var chartData = payload.data || [];
+                    var cfg       = payload.config || formData;
 
-                            if (count > 0 && records.length > 0) {
-                                // Show a mini table preview of first 5 records
-                                var keys = Object.keys(records[0]);
-                                var previewRows = records.slice(0, 5);
+                    if (!chartData.length) {
+                        $area.html(
+                            '<p style="text-align:center;color:#64748b;padding:30px;">' +
+                            'No hay datos para mostrar con la configuración actual.</p>'
+                        );
+                        return;
+                    }
 
-                                html += '<div style="overflow-x:auto;border-top:1px solid #e5e7eb;">';
-                                html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
-                                html += '<thead><tr>';
-                                keys.forEach(function (k) {
-                                    html += '<th style="padding:6px 8px;background:#f1f5f9;text-align:left;font-weight:600;color:#334155;border-bottom:1px solid #e5e7eb;">';
-                                    html += self.escapeHtml(k) + '</th>';
-                                });
-                                html += '</tr></thead><tbody>';
+                    // Construir un wrapper con la misma estructura que usa
+                    // el frontend para que la leyenda de iconos se ubique
+                    // correctamente debajo del chart.
+                    var wrapperId = 'sgr-chart-preview-wrapper';
+                    var containerId = wrapperId + '-container';
+                    $area.html(
+                        '<div class="sgr-chart-wrapper" id="' + wrapperId + '" style="margin:0;">' +
+                            '<div class="sgr-chart-container" id="' + containerId + '" ' +
+                                 'style="height:' + (parseInt(cfg.chart_height, 10) || 360) + 'px;position:relative;"></div>' +
+                        '</div>'
+                    );
 
-                                previewRows.forEach(function (row) {
-                                    html += '<tr>';
-                                    keys.forEach(function (k) {
-                                        var val = row[k] != null ? String(row[k]) : '';
-                                        // Truncate long values
-                                        if (val.length > 40) val = val.substring(0, 37) + '...';
-                                        html += '<td style="padding:5px 8px;border-bottom:1px solid #f0f0f1;color:#444;">';
-                                        html += self.escapeHtml(val) + '</td>';
-                                    });
-                                    html += '</tr>';
-                                });
-
-                                html += '</tbody></table></div>';
-
-                                if (count > 5) {
-                                    html += '<p style="text-align:center;font-size:11px;color:#999;padding:5px 0;">Mostrando 5 de ' + count + ' registros</p>';
-                                }
-                            }
-
-                            $('#sgr-chart-preview-area').html(html);
-                        } else {
-                            var errMsg = (response.data && response.data.message)
-                                ? response.data.message
-                                : 'Error al obtener datos';
-                            $('#sgr-chart-preview-area').html(
-                                '<p style="text-align:center;color:#d63638;padding:15px;">' +
-                                self.escapeHtml(errMsg) + '</p>'
-                            );
-                        }
-                    },
-                    error: function () {
-                        $btn.prop('disabled', false).text('Actualizar Vista Previa');
-                        $('#sgr-chart-preview-area').html(
-                            '<p style="text-align:center;color:#d63638;padding:15px;">Error de conexion con el servidor.</p>'
+                    var containerEl = document.getElementById(containerId);
+                    if (containerEl && window.SGRChart && typeof window.SGRChart.render === 'function') {
+                        window.SGRChart.render(containerEl, chartData, cfg);
+                    } else {
+                        $area.html(
+                            '<p style="text-align:center;color:#d63638;padding:15px;">' +
+                            'SGRChart.render no está disponible (¿se cargó frontend-charts.js?).</p>'
                         );
                     }
-                });
+                },
+                error: function () {
+                    $btn.prop('disabled', false).text('Actualizar Vista Previa');
+                    $area.html(
+                        '<p style="text-align:center;color:#d63638;padding:15px;">Error de conexión con el servidor.</p>'
+                    );
+                }
             });
+        },
+
+        /**
+         * Recopilar la configuración actual del formulario para enviarla
+         * al endpoint de preview. Devuelve un objeto aplanado con los
+         * mismos nombres de campo que el AJAX handler PHP espera.
+         */
+        _collectConfig: function () {
+            var formData = {
+                chart_type:       $('input[name="sgr_chart[chart_type]"]:checked').val() || 'bar',
+                data_view:        $('#sgr-data-view').val() || '',
+                limit:            $('#sgr-limit').val() || 20,
+                order_dir:        $('#sgr-order-dir').val() || $('select[name="sgr_chart[order_dir]"]').val() || 'DESC',
+                chart_height:     $('#sgr-chart-height').val() || 400,
+                number_format:    $('#sgr-number-format').val() || 'colombiano',
+                colors:           $('#sgr-colors').val() || '',
+                legend_mode:      $('#sgr-legend-mode').val() || 'auto',
+                x_labels_rotate:  $('#sgr-x-labels-rotate').val() || 0,
+                x_labels_size:    $('#sgr-x-labels-size').val() || 12,
+                x_labels_visible: $('input[name="sgr_chart[x_labels_visible]"]').is(':checked') ? 1 : 0,
+                show_legend:      $('input[name="sgr_chart[show_legend]"]').is(':checked') ? 1 : 0
+            };
+            return formData;
         },
 
         /* ===========================================

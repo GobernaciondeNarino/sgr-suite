@@ -171,9 +171,44 @@ foreach ( $views as $vk => $vi ) {
                 </td>
             </tr>
             <tr>
+                <th><label for="sgr-legend-mode"><?php esc_html_e( 'Leyenda', 'sgr-suite' ); ?></label></th>
+                <td>
+                    <select name="sgr_chart[legend_mode]" id="sgr-legend-mode" class="regular-text">
+                        <option value="auto"   <?php selected( $config['legend_mode'] ?? 'auto', 'auto' ); ?>><?php esc_html_e( 'Automática (texto D3plus)', 'sgr-suite' ); ?></option>
+                        <option value="icons"  <?php selected( $config['legend_mode'] ?? 'auto', 'icons' ); ?>><?php esc_html_e( 'Con iconos (personalizada)', 'sgr-suite' ); ?></option>
+                        <option value="hidden" <?php selected( $config['legend_mode'] ?? 'auto', 'hidden' ); ?>><?php esc_html_e( 'Oculta', 'sgr-suite' ); ?></option>
+                    </select>
+                    <p class="description">
+                        <?php esc_html_e( 'La leyenda con iconos asigna automáticamente un icono coherente a cada categoría (dependencia, entidad, vigencia, municipio, riesgo...).', 'sgr-suite' ); ?>
+                    </p>
+                </td>
+            </tr>
+            <tr>
+                <th><?php esc_html_e( 'Eje X (etiquetas)', 'sgr-suite' ); ?></th>
+                <td>
+                    <label style="display:block;margin-bottom:6px;">
+                        <input type="checkbox" name="sgr_chart[x_labels_visible]" value="1" <?php checked( $config['x_labels_visible'] ?? true ); ?>>
+                        <?php esc_html_e( 'Mostrar etiquetas del eje X', 'sgr-suite' ); ?>
+                    </label>
+                    <label style="display:inline-block;margin-right:14px;">
+                        <?php esc_html_e( 'Rotación (°)', 'sgr-suite' ); ?>
+                        <input type="number" name="sgr_chart[x_labels_rotate]" id="sgr-x-labels-rotate"
+                               value="<?php echo esc_attr( $config['x_labels_rotate'] ?? 0 ); ?>"
+                               min="0" max="90" step="5" class="small-text">
+                    </label>
+                    <label style="display:inline-block;">
+                        <?php esc_html_e( 'Tamaño (px)', 'sgr-suite' ); ?>
+                        <input type="number" name="sgr_chart[x_labels_size]" id="sgr-x-labels-size"
+                               value="<?php echo esc_attr( $config['x_labels_size'] ?? 12 ); ?>"
+                               min="8" max="24" class="small-text">
+                    </label>
+                    <p class="description"><?php esc_html_e( 'Aplica a barras, líneas, área y scatter. En pie/donut/treemap/geomap se ignora.', 'sgr-suite' ); ?></p>
+                </td>
+            </tr>
+            <tr>
                 <th><?php esc_html_e( 'Opciones', 'sgr-suite' ); ?></th>
                 <td>
-                    <label><input type="checkbox" name="sgr_chart[show_legend]" value="1" <?php checked( $config['show_legend'] ?? true ); ?>> <?php esc_html_e( 'Mostrar leyenda', 'sgr-suite' ); ?></label><br>
+                    <label><input type="checkbox" name="sgr_chart[show_legend]" value="1" <?php checked( $config['show_legend'] ?? true ); ?>> <?php esc_html_e( 'Mostrar leyenda (compatibilidad)', 'sgr-suite' ); ?></label><br>
                     <label><input type="checkbox" name="sgr_chart[show_toolbar]" value="1" <?php checked( $config['show_toolbar'] ?? true ); ?>> <?php esc_html_e( 'Mostrar barra de herramientas (Detalle, Compartir, Datos, Imagen, Descarga)', 'sgr-suite' ); ?></label>
                 </td>
             </tr>

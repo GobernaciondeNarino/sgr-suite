@@ -44,6 +44,165 @@
         };
     }
 
+    /**
+     * Aplicar la configuración de etiquetas del eje X sobre un chart d3plus.
+     *
+     * Sólo tiene sentido para charts con ejes (bar/barH/line/area/scatter y
+     * sus variantes). Para tipos categóricos (pie/donut/treemap/pack/geomap)
+     * se ignora silenciosamente.
+     */
+    function applyXAxisConfig(chart, chartType, config) {
+        if (!chart || typeof chart.xConfig !== 'function') { return; }
+
+        // Tipos donde el eje X no aplica.
+        var skip = ['pie', 'donut', 'treemap', 'pack', 'geomap'];
+        if (skip.indexOf(chartType) !== -1) { return; }
+
+        var visible = config.x_labels_visible !== false;  // default: true
+        var rotate  = parseInt(config.x_labels_rotate || 0, 10) || 0;
+        var size    = parseInt(config.x_labels_size || 12, 10) || 12;
+
+        try {
+            chart.xConfig({
+                shapeConfig: {
+                    labelConfig: {
+                        fontSize: size,
+                        rotate: rotate
+                    }
+                },
+                labels: visible,
+                ticks: visible ? undefined : []
+            });
+        } catch (err) {
+            // Algunos sub-charts pueden no exponer el mismo schema.
+            console.warn('SGR Chart: xConfig no aplicado:', err && err.message);
+        }
+
+        // barH invierte ejes: también aplicamos a yConfig para preservar
+        // consistencia visual (las etiquetas textuales ahora están en Y).
+        if (chartType === 'barH' && typeof chart.yConfig === 'function') {
+            try {
+                chart.yConfig({
+                    shapeConfig: {
+                        labelConfig: {
+                            fontSize: size,
+                            rotate: 0
+                        }
+                    },
+                    labels: visible
+                });
+            } catch (_) { /* ignore */ }
+        }
+    }
+
+    /**
+     * Tabla compacta de iconos SVG para fallback/JS cuando el servidor
+     * no provee config.legend_icons (p.ej., renders que no pasan por
+     * PHP). Los mismos patrones que el catálogo PHP en
+     * class-visualizer.php::get_icon_catalog().
+     */
+    var ICON_CATALOG = {
+        health:    { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3h4v5h5v4h-5v5h-4v-5H5V8h5V3z"/></svg>', match: ['idsn','salud','instituto departamental'] },
+        water:     { svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c-4.5 6.5-7 9.5-7 13a7 7 0 0 0 14 0c0-3.5-2.5-6.5-7-13z"/></svg>', match: ['pda','agua','plan departamental'] },
+        road:      { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21 L8 3 M20 21 L16 3 M12 3 v3 m0 4 v3 m0 4 v4"/></svg>', match: ['infra','obra','vias','via '] },
+        coins:     { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6 v6 c0 1.7 3.6 3 8 3 s8-1.3 8-3 V6"/><path d="M4 12 v6 c0 1.7 3.6 3 8 3 s8-1.3 8-3 v-6"/></svg>', match: ['regalia','regalía','sgr'] },
+        building:  { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 21V7l8-4 8 4v14"/><path d="M9 21V12h6v9"/><path d="M4 21h16"/></svg>', match: ['municipio'] },
+        star:      { svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 L14.7 8.6 L22 9.3 L16.4 14.1 L18.2 21.3 L12 17.6 L5.8 21.3 L7.6 14.1 L2 9.3 L9.3 8.6 Z"/></svg>', match: ['departamento','gobernacion'] },
+        briefcase: { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M2 13h20"/></svg>', match: ['otro','especial','entidad'] },
+        calendar:  { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>', match: ['2023','2024','2025','2026','2027','vigencia','idsn*','infra*'] },
+        target:    { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>', match: ['meta','objetivo'] },
+        document:  { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><path d="M8 13h8M8 17h5"/></svg>', match: ['contrato'] },
+        alert:     { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>', match: ['alto','riesgo alto'] },
+        warning:   { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>', match: ['medio','riesgo medio'] },
+        check:     { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M7 12l4 4 6-8"/></svg>', match: ['bajo','riesgo bajo'] },
+        mappin:    { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>', match: ['mapa','geomap','mun.','mpio'] },
+        'default': { svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-3 2.5-3 4.5"/><path d="M12 18h.01"/></svg>', match: [] }
+    };
+
+    function normalizeKey(v) {
+        if (v == null) return '';
+        var s = String(v);
+        // Quitar tildes y pasar a minúsculas.
+        try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (_) { /* IE */ }
+        return s.toLowerCase();
+    }
+
+    function resolveIconForLabel(label) {
+        var needle = normalizeKey(label);
+        var keys = Object.keys(ICON_CATALOG);
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            if (k === 'default') continue;
+            var patterns = ICON_CATALOG[k].match || [];
+            for (var j = 0; j < patterns.length; j++) {
+                if (patterns[j] && needle.indexOf(patterns[j]) !== -1) {
+                    return ICON_CATALOG[k];
+                }
+            }
+        }
+        return ICON_CATALOG['default'];
+    }
+
+    /**
+     * Dibujar una leyenda HTML con iconos debajo del wrapper del gráfico.
+     *
+     * Usa config.legend_icons si vienen pre-computados desde PHP,
+     * o los calcula sobre la marcha a partir de las filas únicas de data
+     * (campo series si existe, label si no).
+     */
+    function renderIconLegend(wrapperEl, data, config) {
+        if (!wrapperEl) return;
+
+        var items = Array.isArray(config.legend_icons) ? config.legend_icons.slice() : null;
+        if (!items || !items.length) {
+            // Fallback: construir en cliente.
+            items = [];
+            var seen = {};
+            var field = data.length && data[0].series !== undefined ? 'series' : 'label';
+            var palette = (config.colors && config.colors.length) ? config.colors : ['#348afb','#1e40af','#059669','#d97706','#dc2626','#7c3aed','#0891b2','#be185d'];
+            var idx = 0;
+            for (var i = 0; i < data.length; i++) {
+                var lbl = data[i][field];
+                if (lbl == null || seen[lbl]) continue;
+                seen[lbl] = true;
+                var icon = resolveIconForLabel(lbl);
+                items.push({
+                    label: String(lbl),
+                    color: palette[idx % palette.length],
+                    svg:   icon.svg
+                });
+                idx++;
+            }
+        }
+
+        if (!items.length) return;
+
+        var legend = document.createElement('div');
+        legend.className = 'sgr-chart-icon-legend';
+
+        items.forEach(function (item) {
+            var chip = document.createElement('div');
+            chip.className = 'sgr-chart-icon-legend-item';
+            chip.setAttribute('title', item.label);
+
+            var iconBox = document.createElement('span');
+            iconBox.className = 'sgr-chart-icon-legend-icon';
+            iconBox.style.backgroundColor = item.color || '#94a3b8';
+            iconBox.style.color = '#ffffff';
+            iconBox.innerHTML = item.svg || '';
+
+            var labelBox = document.createElement('span');
+            labelBox.className = 'sgr-chart-icon-legend-label';
+            labelBox.textContent = item.label;
+
+            chip.appendChild(iconBox);
+            chip.appendChild(labelBox);
+            legend.appendChild(chip);
+        });
+
+        wrapperEl.appendChild(legend);
+    }
+
     var ChartManager = {
         charts: {},
 
@@ -149,16 +308,51 @@
 
         renderChart: function (uid, data, config) {
             var container = document.getElementById(uid + '-container');
-            if (!container || !data || !data.length) { this.showError(uid, 'No hay datos disponibles.'); return; }
+            if (!container) { this.showError(uid, 'Contenedor no encontrado.'); return; }
+            try {
+                this._doRender(container, data, config);
+            } catch (e) {
+                console.error('SGR Chart error:', e);
+                this.showError(uid, 'Error al renderizar: ' + e.message);
+            }
+        },
+
+        /**
+         * Núcleo del renderer. Se comparte con ChartManager.renderChart()
+         * y con la API pública window.SGRChart.render(), que el admin usa
+         * para dibujar la vista previa en tiempo real.
+         *
+         * Recibe un elemento DOM (no un uid), data y config. No captura
+         * errores: el caller decide cómo mostrarlos.
+         *
+         * @private
+         */
+        _doRender: function (container, data, config) {
+            if (!container) {
+                return;
+            }
+            if (!data || !data.length) {
+                container.innerHTML = '<div class="sgr-chart-error"><p>' + escapeHtml('No hay datos disponibles.') + '</p></div>';
+                return;
+            }
+            // Limpiar restos previos (loader, error, gráfico anterior).
             container.innerHTML = '';
+            // Limpiar cualquier leyenda de iconos previa en el wrapper padre.
+            var wrapperEl = container.closest ? container.closest('.sgr-chart-wrapper') : null;
+            if (wrapperEl) {
+                var oldLegend = wrapperEl.querySelector('.sgr-chart-icon-legend');
+                if (oldLegend) { oldLegend.parentNode.removeChild(oldLegend); }
+            }
 
             var d3p = window.d3plus;
-            if (!d3p) { this.showError(uid, 'D3Plus no cargado.'); return; }
+            if (!d3p) {
+                container.innerHTML = '<div class="sgr-chart-error"><p>' + escapeHtml('D3Plus no cargado.') + '</p></div>';
+                return;
+            }
 
             var chartType = config.chart_type || 'bar';
             var colorFn = makeColorFn(config.colors);
             var numFormat = config.number_format || 'colombiano';
-            var selector = '#' + uid + '-container';
             var hasSeries = data.length > 0 && data[0].series !== undefined;
             var hasXY = data.length > 0 && data[0].x !== undefined && data[0].y !== undefined;
 
@@ -170,11 +364,18 @@
                 if (d.y !== undefined) d.y = parseFloat(d.y) || 0;
             });
 
-            try {
-                var chart;
-                var tooltipCfg = {body: function (d) { return formatNumber(d.value, numFormat); }};
+            // Asegurar que el contenedor tenga un id para que d3plus pueda
+            // seleccionarlo. Si es un elemento temporal del admin, sintetizamos
+            // uno estable derivado del timestamp.
+            if (!container.id) {
+                container.id = 'sgr-chart-anon-' + Math.random().toString(36).slice(2, 9);
+            }
+            var selector = '#' + container.id;
 
-                switch (chartType) {
+            var chart;
+            var tooltipCfg = {body: function (d) { return formatNumber(d.value, numFormat); }};
+
+            switch (chartType) {
 
                     case 'bar':
                         chart = new d3p.BarChart()
@@ -409,15 +610,32 @@
                             .shapeConfig({fill: colorFn});
                 }
 
-                if (config.show_legend === false && chart.legend) {
-                    chart.legend(false);
-                }
+            // Ocultar la leyenda nativa de d3plus cuando:
+            //  - el usuario eligió "iconos" (le dibujamos una leyenda
+            //    propia debajo del gráfico), o
+            //  - el usuario eligió "oculta", o
+            //  - mantuvo el legacy show_legend === false.
+            var legendMode = config.legend_mode || 'auto';
+            var hideNativeLegend =
+                legendMode === 'icons' ||
+                legendMode === 'hidden' ||
+                config.show_legend === false;
+            if (hideNativeLegend && chart.legend) {
+                try { chart.legend(false); } catch (_) { /* ignore */ }
+            }
 
-                chart.render();
+            // Aplicar configuración de etiquetas del eje X (si el chart
+            // la soporta). D3plus v2 Bar/Line/Area/Plot aceptan xConfig
+            // con shapeConfig.labelConfig para ajustar fuente y rotación.
+            applyXAxisConfig(chart, chartType, config);
 
-            } catch (e) {
-                console.error('SGR Chart error:', e);
-                this.showError(uid, 'Error al renderizar: ' + e.message);
+            chart.render();
+
+            // Leyenda con iconos (HTML propio) — se construye después
+            // del render para insertarse en el wrapper. El admin puede
+            // sobre-escribir config.legend_icons en runtime.
+            if (legendMode === 'icons' && wrapperEl) {
+                renderIconLegend(wrapperEl, data, config);
             }
         },
 
@@ -497,6 +715,29 @@
             a.click();
             URL.revokeObjectURL(a.href);
         }
+    };
+
+    // API pública reutilizable por el admin (vista previa) y por terceros.
+    //
+    //   window.SGRChart.render(containerEl, data, config)
+    //     containerEl: elemento DOM donde dibujar (se vacía antes).
+    //     data:        array devuelto por el AJAX de preview/get_chart_data.
+    //     config:      objeto config devuelto junto con los datos.
+    //
+    // Si containerEl pertenece a un `.sgr-chart-wrapper`, la leyenda de
+    // iconos se inserta automáticamente en el wrapper padre.
+    window.SGRChart = {
+        render: function (containerEl, data, config) {
+            if (!containerEl) return;
+            try {
+                ChartManager._doRender(containerEl, data, config || {});
+            } catch (e) {
+                console.error('SGR Chart error:', e);
+                containerEl.innerHTML = '<div class="sgr-chart-error"><p>' +
+                    escapeHtml('Error al renderizar: ' + e.message) + '</p></div>';
+            }
+        },
+        resolveIconForLabel: resolveIconForLabel
     };
 
     if (document.readyState === 'loading') {

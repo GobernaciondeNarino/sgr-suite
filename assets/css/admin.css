@@ -671,3 +671,61 @@
         padding-top: 0;
     }
 }
+
+/* ==========================================================================
+   Vista previa del gráfico en la meta-box lateral (v2.4.0)
+   ========================================================================== */
+
+#sgr-chart-preview-area {
+    min-height: 260px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 0;
+    overflow: hidden;
+}
+
+#sgr-chart-preview-area .sgr-chart-wrapper {
+    background: #ffffff;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
+}
+
+#sgr-chart-preview-area .sgr-chart-container {
+    min-height: 200px;
+}
+
+#sgr-chart-preview-area .sgr-chart-icon-legend {
+    padding: 10px 8px 12px;
+    gap: 6px 8px;
+}
+
+#sgr-chart-preview-area .sgr-chart-icon-legend-item {
+    font-size: 11px;
+    padding: 3px 8px 3px 3px;
+}
+
+#sgr-chart-preview-area .sgr-chart-icon-legend-icon {
+    width: 22px;
+    height: 22px;
+}
+
+#sgr-chart-preview-area .sgr-chart-icon-legend-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.sgr-preview-loading {
+    padding: 40px 20px;
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+}
+
+/* El meta box lateral del preview necesita un poco más de ancho para
+   que el chart no quede apretado. La sidebar tiene 280px estándar. */
+#sgr_chart_preview.postbox .inside {
+    padding: 10px 12px;
+}
