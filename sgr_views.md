@@ -1,8 +1,29 @@
 # SGR Nariño — Vistas JSON para Visualizaciones D3plus
 
-> **Fuente:** `https://gobiernoabierto.narino.gov.co/wp-api/sgr.php`
-> **Endpoint resumen:** 531 proyectos · 71 contratos · 4 dependencias · 3 entidades ejecutoras principales
+> **Fuente:** `https://gobiernoabierto.narino.gov.co/wp-api/sgr.php` Actualizada diariamente
 > **Biblioteca:** [D3plus v3](https://d3plus.org/) — 20 tipos de gráfico
+> https://d3plus.org/?path=/docs/core-charts-areaplot--d3plus
+> https://d3plus.org/?path=/docs/core-charts-barchart--d3plus
+> https://d3plus.org/?path=/docs/core-charts-bumpchart--d3plus
+> https://d3plus.org/?path=/docs/core-charts-donut--d3plus
+> https://d3plus.org/?path=/docs/core-charts-geomap--d3plus | https://gobiernoabierto.narino.gov.co/wp-content/uploads/2025/06/narino_municipios.geojson
+> https://d3plus.org/?path=/docs/core-charts-lineplot--d3plus
+> https://d3plus.org/?path=/docs/core-charts-matrix--d3plus
+> https://d3plus.org/?path=/docs/core-charts-network--d3plus
+> https://d3plus.org/?path=/docs/core-charts-pack--d3plus
+> https://d3plus.org/?path=/docs/core-charts-pie--d3plus
+> https://d3plus.org/?path=/docs/core-charts-plot--d3plus
+> https://d3plus.org/?path=/docs/core-charts-priestley--d3plus
+> https://d3plus.org/?path=/docs/core-charts-radar--d3plus
+> https://d3plus.org/?path=/docs/core-charts-radialmatrix--d3plus
+> https://d3plus.org/?path=/docs/core-charts-rings--d3plus
+> https://d3plus.org/?path=/docs/core-charts-sankey--d3plus
+> https://d3plus.org/?path=/docs/core-charts-stackedarea--d3plus
+> https://d3plus.org/?path=/docs/core-charts-tree--d3plus
+> https://d3plus.org/?path=/docs/core-charts-treemap--d3plus
+
+
+
 
 ---
 
