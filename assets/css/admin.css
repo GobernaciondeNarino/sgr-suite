@@ -729,3 +729,111 @@
 #sgr_chart_preview.postbox .inside {
     padding: 10px 12px;
 }
+
+/* ==========================================================================
+   Widget lateral "Datos de la Vista" (v2.5.0)
+   ========================================================================== */
+
+.sgr-chart-data-widget {
+    font-size: 12px;
+    color: #334155;
+}
+
+.sgr-data-widget-placeholder,
+.sgr-data-widget-empty {
+    color: #94a3b8;
+    font-size: 12px;
+    margin: 0;
+}
+
+.sgr-data-widget-summary {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 0 10px;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 8px;
+}
+
+.sgr-data-widget-count {
+    font-size: 22px;
+    font-weight: 900;
+    color: #1e40af;
+    line-height: 1;
+}
+
+.sgr-data-widget-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.sgr-data-widget-scroll {
+    max-height: 340px;
+    overflow: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    background: #ffffff;
+}
+
+.sgr-data-widget-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.sgr-data-widget-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f1f5f9;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 700;
+    color: #1e293b;
+    border-bottom: 1px solid #cbd5e1;
+    white-space: nowrap;
+}
+
+.sgr-data-widget-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #475569;
+    vertical-align: top;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sgr-data-widget-table tr:last-child td {
+    border-bottom: none;
+}
+
+.sgr-data-widget-more {
+    text-align: center;
+    font-size: 10px;
+    color: #94a3b8;
+    padding: 6px 0 0;
+    margin: 0;
+}
+
+/* ==========================================================================
+   Tipos de gráfico deshabilitados por incompatibilidad (v2.5.0)
+   ========================================================================== */
+
+.sgr-chart-type-option.sgr-chart-type-disabled {
+    opacity: 0.32;
+    cursor: not-allowed;
+    pointer-events: none;
+    filter: grayscale(0.6);
+}
+
+.sgr-chart-type-option.sgr-chart-type-disabled::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: transparent;
+}

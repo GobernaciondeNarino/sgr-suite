@@ -135,5 +135,78 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.4.0: ejes configurables, leyenda con iconos, vista previa en admin.' );
         }
+
+        // v2.5.0: Compatibilidad vista↔gráfico exhaustiva + data widget.
+        //  - get_view_metadata() declara categoría + lista de chart_type
+        //    compatibles para las 31 vistas (única fuente de verdad).
+        //  - Filtrado bidireccional en el editor del admin: al cambiar
+        //    la vista se ajusta el tipo automáticamente y viceversa.
+        //  - save_chart_config() fuerza la combinación al primer tipo
+        //    compatible si se intenta guardar algo inconsistente.
+        //  - Nueva meta-box lateral "Datos de la Vista" con tabla en
+        //    vivo de los primeros 10 registros devueltos por la vista.
+        //  - Selector de vistas reorganizado por categoría funcional
+        //    (Totales, Rankings, Distribución, Avance, Series, Temporal,
+        //     Geográfico) en lugar de "simples vs. con series".
+        //  - Configs guardadas con combinaciones legacy incompatibles
+        //    se auto-corrigen al cargar (fallback al primer tipo compat).
+        if ( version_compare( $from_version, '2.5.0', '<' ) ) {
+            $this->database->clear_chart_caches();
+            // Normalizar configs antiguas que podrían tener combinaciones
+            // vista↔tipo incompatibles según la nueva matriz exhaustiva.
+            $this->normalize_legacy_chart_configs();
+            $this->logger->info( 'Migración v2.5.0: matriz vista↔gráfico exhaustiva + data widget lateral.' );
+        }
+    }
+
+    /**
+     * Normalizar configs de gráfico guardados con v<2.5.0 que contengan
+     * combinaciones vista↔tipo que la nueva matriz considera inválidas.
+     *
+     * La auto-corrección también ocurre en cada save_chart_config(), así
+     * que este paso sólo adelanta la limpieza al momento de migrar.
+     */
+    private function normalize_legacy_chart_configs(): void {
+        if ( ! function_exists( 'get_posts' ) ) {
+            return;
+        }
+
+        $visualizer = sgr_suite()->visualizer ?? null;
+        if ( ! $visualizer ) {
+            return;
+        }
+
+        $compat     = $visualizer->get_view_chart_compatibility();
+        $chart_ids  = get_posts( [
+            'post_type'   => 'sgr_chart',
+            'numberposts' => -1,
+            'post_status' => 'any',
+            'fields'      => 'ids',
+        ] );
+
+        $fixed = 0;
+        foreach ( $chart_ids as $cid ) {
+            $cfg = get_post_meta( $cid, '_sgr_chart_config', true );
+            if ( ! is_array( $cfg ) ) {
+                continue;
+            }
+            $view = $cfg['data_view'] ?? '';
+            $type = $cfg['chart_type'] ?? '';
+            if ( ! isset( $compat[ $view ] ) ) {
+                continue;
+            }
+            $allowed = $compat[ $view ];
+            if ( empty( $allowed ) || in_array( $type, $allowed, true ) ) {
+                continue;
+            }
+            $cfg['chart_type'] = $allowed[0];
+            update_post_meta( $cid, '_sgr_chart_config', $cfg );
+            delete_transient( 'sgr_chart_data_' . $cid );
+            $fixed++;
+        }
+
+        if ( $fixed > 0 ) {
+            $this->logger->info( "v2.5.0: {$fixed} gráfico(s) con combinación vista↔tipo incompatible fueron auto-corregidos." );
+        }
     }
 }
