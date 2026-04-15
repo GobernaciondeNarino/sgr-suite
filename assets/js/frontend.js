@@ -150,9 +150,15 @@
                     html += '<div class="regalias-modal-images-grid" style="margin-top: 10px;">';
 
                     contrato.imagenesEjecContractual.forEach(function (img, imgIdx) {
-                        var imgUrl = escapeHtml(img);
+                        // Sólo se emite una URL http(s) válida para evitar javascript: u otros esquemas.
+                        var rawUrl = typeof img === 'string' ? img.trim() : '';
+                        if (!/^https?:\/\//i.test(rawUrl)) {
+                            return;
+                        }
+                        var safeUrl = escapeHtml(rawUrl);
                         html += '<div class="regalias-modal-image-item">';
-                        html += '<img src="' + imgUrl + '" alt="Imagen ' + (imgIdx + 1) + '" onclick="window.open(\'' + imgUrl + '\', \'_blank\')" loading="lazy">';
+                        // Sin onclick inline; se delega el click más abajo tras insertar el HTML.
+                        html += '<img src="' + safeUrl + '" alt="Imagen ' + (imgIdx + 1) + '" data-sgr-full="' + safeUrl + '" loading="lazy">';
                         html += '</div>';
                     });
 
@@ -180,6 +186,17 @@
         var modalBody = document.getElementById('regalias-grid-modal-body');
 
         modalBody.innerHTML = generarContenidoModal(proyecto);
+
+        // Enlazar apertura segura de imágenes sin onclick inline.
+        modalBody.querySelectorAll('img[data-sgr-full]').forEach(function (imgEl) {
+            imgEl.addEventListener('click', function () {
+                var href = imgEl.getAttribute('data-sgr-full') || '';
+                if (/^https?:\/\//i.test(href)) {
+                    window.open(href, '_blank', 'noopener,noreferrer');
+                }
+            });
+        });
+
         modal.classList.add('show');
         document.body.style.overflow = 'hidden';
     };

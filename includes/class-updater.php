@@ -60,5 +60,46 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.0.0: FK robustas, chart views, card customizer.' );
         }
+
+        // v2.1.2: Revisión de módulos y endurecimiento de seguridad.
+        //  - Se corrigen rutas REST (colisión /proyectos/csv ↔ /proyectos/{bpin}).
+        //  - CSV export en streaming para evitar OOM.
+        //  - TRUNCATE -> DELETE para compatibilidad con FKs.
+        //  - Importación asíncrona arreglada (hook registrado en el bootstrap).
+        //  - Sanitización reforzada del card customizer.
+        //  - Corrección XSS en galería de imágenes del modal frontend.
+        if ( version_compare( $from_version, '2.1.2', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.1.2: hardening de seguridad y correcciones de módulos.' );
+        }
+
+        // v2.2.0: Nuevas vistas de datos derivadas del roadmap sgr_views.md.
+        //  - V-04 vigencia_valor, V-05 vigencia_dependencia_x, V-05b por proyectos.
+        //  - V-07b avance físico promedio por dependencia.
+        //  - V-08 scatter_valor_avance (+ V-08b distribucion_riesgo_contratos).
+        //  - V-14 matrix_municipio_dependencia.
+        //  - V-15 ranking_dependencias_vigencia.
+        //  - V-19 avance_por_entidad (distribución por entidad).
+        //  - Nuevo tipo de gráfico "scatter" (D3plus Plot).
+        // Las vistas antiguas siguen funcionando; sólo se limpia la cache.
+        if ( version_compare( $from_version, '2.2.0', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.2.0: nuevas vistas (V-04, V-05, V-08, V-14, V-15, V-19) y scatter chart.' );
+        }
+
+        // v2.3.0: Geomap de Nariño (V-12 y V-13).
+        //  - Topojson + lookup de DIVIPOLA copiados desde tic-suite
+        //    (data/topo/narino_municipios.topojson, .lookup.json).
+        //  - Normalizador PHP que resuelve variantes ("Alban / San José",
+        //    "Los Andes Sotomayor", "San Juan de Pasto", listas separadas
+        //    por coma, etc.) a los 64 municipios canónicos.
+        //  - Vistas geomap_valor_municipio y geomap_contratos_municipio
+        //    con post-procesamiento en PHP (agregación por DIVIPOLA).
+        //  - Nuevo tipo de gráfico "geomap" (D3plus v2 Geomap).
+        //  - Filtro vista ↔ tipo de gráfico en el editor del admin.
+        if ( version_compare( $from_version, '2.3.0', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.3.0: geomap de Nariño (topojson + vistas V-12/V-13).' );
+        }
     }
 }

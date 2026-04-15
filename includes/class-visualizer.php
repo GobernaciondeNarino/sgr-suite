@@ -166,7 +166,52 @@ class SGR_Suite_Visualizer {
             'pack'         => [ 'label' => esc_html__( 'Burbujas (Pack)', 'sgr-suite' ) ],
             'stacked_bar'  => [ 'label' => esc_html__( 'Barras Apiladas', 'sgr-suite' ) ],
             'grouped_bar'  => [ 'label' => esc_html__( 'Barras Agrupadas', 'sgr-suite' ) ],
+            'scatter'      => [ 'label' => esc_html__( 'Dispersión (Scatter)', 'sgr-suite' ) ],
+            'geomap'       => [ 'label' => esc_html__( 'Mapa (Geomap Nariño)', 'sgr-suite' ) ],
         ];
+    }
+
+    /**
+     * Matriz de compatibilidad vista ↔ tipo de gráfico.
+     *
+     * Se expone al admin en forma de data-attribute para que el editor de
+     * gráficos filtre las opciones de "vista" cuando se elige un tipo de
+     * gráfico específico (p.ej., geomap sólo admite las vistas geomap_*).
+     *
+     * @return array<string,string[]> Mapa view_key => lista de chart_type
+     *                                 soportados. Si una vista no aparece,
+     *                                 es compatible con todos los tipos.
+     */
+    public function get_view_chart_compatibility(): array {
+        return [
+            // Las vistas geomap requieren un tipo geomap y viceversa.
+            'geomap_valor_municipio'     => [ 'geomap' ],
+            'geomap_contratos_municipio' => [ 'geomap' ],
+            // Scatter funciona de manera nativa con la vista scatter.
+            'scatter_valor_avance'       => [ 'scatter', 'plot' ],
+            // Series: apiladas/agrupadas/area.
+            'valor_dependencia_x_entidad'     => [ 'stacked_bar', 'grouped_bar', 'bar', 'area' ],
+            'proyectos_dependencia_x_entidad' => [ 'stacked_bar', 'grouped_bar', 'bar' ],
+            'proyectos_vs_contratos_x_dependencia' => [ 'grouped_bar', 'stacked_bar', 'bar' ],
+            'metas_vs_contratos_x_dependencia'     => [ 'grouped_bar', 'stacked_bar', 'bar' ],
+            'valor_municipio_x_dependencia'   => [ 'stacked_bar', 'grouped_bar', 'bar' ],
+            'valor_entidad_x_dependencia'     => [ 'stacked_bar', 'grouped_bar', 'bar' ],
+            'vigencia_dependencia_x'          => [ 'stacked_bar', 'area', 'line', 'grouped_bar' ],
+            'proyectos_vigencia_x_dependencia' => [ 'grouped_bar', 'stacked_bar', 'line' ],
+            'ranking_dependencias_vigencia'   => [ 'grouped_bar', 'line', 'stacked_bar' ],
+            'matrix_municipio_dependencia'    => [ 'stacked_bar', 'grouped_bar', 'treemap' ],
+            // Distribución categórica (buckets): ideal para pie/donut.
+            'distribucion_proyectos_con_sin_contrato' => [ 'pie', 'donut', 'bar' ],
+            'distribucion_proyectos_con_sin_metas'    => [ 'pie', 'donut', 'bar' ],
+            'distribucion_riesgo_contratos'           => [ 'pie', 'donut', 'bar' ],
+        ];
+    }
+
+    /**
+     * Devolver la URL del topojson de Nariño (servido desde el plugin).
+     */
+    public function get_topojson_url(): string {
+        return SGR_SUITE_URL . 'data/topo/narino_municipios.topojson';
     }
 
     public function get_chart_config( int $chart_id ): array {
@@ -203,7 +248,7 @@ class SGR_Suite_Visualizer {
      * AJAX: Obtener datos del gráfico (público).
      */
     public function ajax_get_chart_data(): void {
-        $chart_id = absint( $_POST['chart_id'] ?? 0 );
+        $chart_id = isset( $_POST['chart_id'] ) ? absint( wp_unslash( $_POST['chart_id'] ) ) : 0;
         if ( ! $chart_id ) {
             wp_send_json_error( [ 'message' => 'ID requerido.' ] );
         }
@@ -240,6 +285,7 @@ class SGR_Suite_Visualizer {
                 'show_toolbar'  => $config['show_toolbar'],
                 'number_format' => $config['number_format'],
                 'colors'        => $config['colors'],
+                'data_view'     => $config['data_view'],
             ],
         ];
 
@@ -258,8 +304,14 @@ class SGR_Suite_Visualizer {
         }
 
         $view_key  = sanitize_text_field( wp_unslash( $_POST['data_view'] ?? 'valor_por_dependencia' ) );
-        $limit     = min( absint( $_POST['limit'] ?? 20 ), 500 );
+        $limit     = min( absint( wp_unslash( $_POST['limit'] ?? 20 ) ), 500 );
         $order_dir = sanitize_text_field( wp_unslash( $_POST['order_dir'] ?? 'DESC' ) );
+
+        // Validar que la vista exista contra la whitelist de vistas predefinidas.
+        $views = $this->database->get_chart_views();
+        if ( ! isset( $views[ $view_key ] ) ) {
+            wp_send_json_error( [ 'message' => 'Vista inválida.' ], 400 );
+        }
 
         $data = $this->database->execute_chart_view( $view_key, $limit, $order_dir );
 
@@ -291,7 +343,8 @@ class SGR_Suite_Visualizer {
 
         $nonce       = wp_create_nonce( 'sgr_chart_' . $chart_id );
         $uid         = 'sgr-chart-' . $chart_id . '-' . wp_rand( 1000, 9999 );
-        $extra_class = ! empty( $atts['class'] ) ? ' ' . esc_attr( $atts['class'] ) : '';
+        // El escape final ocurre en el template; aquí sólo se normaliza.
+        $extra_class = ! empty( $atts['class'] ) ? sanitize_html_class( $atts['class'] ) : '';
 
         ob_start();
         include SGR_SUITE_PATH . 'templates/frontend/chart.php';
@@ -308,7 +361,10 @@ class SGR_Suite_Visualizer {
         wp_enqueue_script( 'sgr-d3plus', 'https://cdn.jsdelivr.net/npm/d3plus@2.0.2/build/d3plus.full.min.js', [], '2.0.2', true );
         wp_enqueue_style( 'sgr-suite-frontend', SGR_SUITE_URL . 'assets/css/frontend.css', [], SGR_SUITE_VERSION );
         wp_enqueue_script( 'sgr-suite-charts', SGR_SUITE_URL . 'assets/js/frontend-charts.js', [ 'sgr-d3plus' ], SGR_SUITE_VERSION, true );
-        wp_localize_script( 'sgr-suite-charts', 'sgrCharts', [ 'ajaxUrl' => admin_url( 'admin-ajax.php' ) ] );
+        wp_localize_script( 'sgr-suite-charts', 'sgrCharts', [
+            'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
+            'topojsonUrl' => $this->get_topojson_url(),
+        ] );
     }
 
     public function enqueue_admin_chart_assets( string $hook ): void {
@@ -320,8 +376,10 @@ class SGR_Suite_Visualizer {
         wp_enqueue_style( 'sgr-suite-admin', SGR_SUITE_URL . 'assets/css/admin.css', [], SGR_SUITE_VERSION );
         wp_enqueue_script( 'sgr-suite-admin-charts', SGR_SUITE_URL . 'assets/js/admin-charts.js', [ 'jquery' ], SGR_SUITE_VERSION, true );
         wp_localize_script( 'sgr-suite-admin-charts', 'sgrChartsAdmin', [
-            'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-            'nonce'   => wp_create_nonce( 'sgr_suite_admin_nonce' ),
+            'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+            'nonce'         => wp_create_nonce( 'sgr_suite_admin_nonce' ),
+            'compatibility' => $this->get_view_chart_compatibility(),
+            'topojsonUrl'   => $this->get_topojson_url(),
         ] );
     }
 

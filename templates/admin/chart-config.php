@@ -32,6 +32,8 @@ $chart_icons = [
     'pack'         => '<svg viewBox="0 0 48 48" width="48" height="48"><circle cx="20" cy="22" r="12" fill="#4285f4" opacity="0.7"/><circle cx="34" cy="18" r="8" fill="#ea4335" opacity="0.7"/><circle cx="30" cy="34" r="7" fill="#34a853" opacity="0.7"/><circle cx="14" cy="36" r="5" fill="#fbbc04" opacity="0.7"/></svg>',
     'stacked_bar'  => '<svg viewBox="0 0 48 48" width="48" height="48"><rect x="6" y="28" width="8" height="14" fill="#4285f4" rx="1"/><rect x="6" y="18" width="8" height="10" fill="#fbbc04" rx="1"/><rect x="17" y="20" width="8" height="22" fill="#4285f4" rx="1"/><rect x="17" y="8" width="8" height="12" fill="#fbbc04" rx="1"/><rect x="28" y="24" width="8" height="18" fill="#4285f4" rx="1"/><rect x="28" y="12" width="8" height="12" fill="#fbbc04" rx="1"/><rect x="39" y="30" width="5" height="12" fill="#4285f4" rx="1"/><rect x="39" y="22" width="5" height="8" fill="#fbbc04" rx="1"/></svg>',
     'grouped_bar'  => '<svg viewBox="0 0 48 48" width="48" height="48"><rect x="4" y="20" width="5" height="22" fill="#4285f4" rx="1"/><rect x="10" y="14" width="5" height="28" fill="#fbbc04" rx="1"/><rect x="19" y="10" width="5" height="32" fill="#4285f4" rx="1"/><rect x="25" y="18" width="5" height="24" fill="#fbbc04" rx="1"/><rect x="34" y="24" width="5" height="18" fill="#4285f4" rx="1"/><rect x="40" y="16" width="5" height="26" fill="#fbbc04" rx="1"/></svg>',
+    'scatter'      => '<svg viewBox="0 0 48 48" width="48" height="48"><line x1="6" y1="42" x2="44" y2="42" stroke="#94a3b8" stroke-width="1.5"/><line x1="6" y1="6" x2="6" y2="42" stroke="#94a3b8" stroke-width="1.5"/><circle cx="12" cy="34" r="3" fill="#4285f4"/><circle cx="18" cy="26" r="2.5" fill="#ea4335"/><circle cx="23" cy="30" r="3.5" fill="#fbbc04"/><circle cx="28" cy="18" r="2" fill="#34a853"/><circle cx="33" cy="24" r="3" fill="#4285f4"/><circle cx="37" cy="12" r="2.5" fill="#ea4335"/><circle cx="41" cy="20" r="2.5" fill="#fbbc04"/></svg>',
+    'geomap'       => '<svg viewBox="0 0 48 48" width="48" height="48"><path d="M6 8 L18 6 L30 10 L42 8 L42 40 L30 42 L18 38 L6 40 Z" fill="#bfdbfe" stroke="#1e40af" stroke-width="1.5" stroke-linejoin="round"/><path d="M18 6 L18 38 M30 10 L30 42" stroke="#1e40af" stroke-width="1" stroke-dasharray="2,2"/><circle cx="14" cy="22" r="2" fill="#dc2626"/><circle cx="24" cy="18" r="2" fill="#ea580c"/><circle cx="36" cy="26" r="2" fill="#fbbc04"/><circle cx="22" cy="32" r="2" fill="#1e40af"/></svg>',
 ];
 
 $data_views = [];
@@ -72,33 +74,50 @@ foreach ( $views as $vk => $vi ) {
                 <td>
                     <select name="sgr_chart[data_view]" id="sgr-data-view" class="regular-text" style="min-width:360px;">
                         <?php
+                        // Clasificar vistas en tres grupos: nuevas (V-XX del roadmap),
+                        // con series, y simples.
+                        $nuevas_views = [];
                         $simple_views = [];
                         $series_views = [];
                         foreach ( $data_views as $vk => $vl ) {
                             $view_def = $views[ $vk ] ?? [];
-                            if ( in_array( 'series', $view_def['columns'] ?? [], true ) ) {
+                            $columns  = $view_def['columns'] ?? [];
+                            $is_nueva = ( strpos( (string) $vl, 'V-' ) === 0 );
+                            if ( $is_nueva ) {
+                                $nuevas_views[ $vk ] = $vl;
+                            } elseif ( in_array( 'series', $columns, true ) ) {
                                 $series_views[ $vk ] = $vl;
                             } else {
                                 $simple_views[ $vk ] = $vl;
                             }
                         }
+                        $current_view = $config['data_view'] ?? 'valor_por_dependencia';
                         ?>
+                        <?php if ( ! empty( $nuevas_views ) ) : ?>
+                        <optgroup label="<?php esc_attr_e( 'Nuevas vistas (roadmap sgr_views.md)', 'sgr-suite' ); ?>">
+                        <?php foreach ( $nuevas_views as $vk => $vl ) : ?>
+                            <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $current_view, $vk ); ?>>
+                                <?php echo esc_html( $vl ); ?>
+                            </option>
+                        <?php endforeach; ?>
+                        </optgroup>
+                        <?php endif; ?>
                         <optgroup label="<?php esc_attr_e( 'Vistas simples (Barras, Pie, Treemap, Líneas)', 'sgr-suite' ); ?>">
                         <?php foreach ( $simple_views as $vk => $vl ) : ?>
-                            <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $config['data_view'] ?? 'valor_por_dependencia', $vk ); ?>>
+                            <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $current_view, $vk ); ?>>
                                 <?php echo esc_html( $vl ); ?>
                             </option>
                         <?php endforeach; ?>
                         </optgroup>
                         <optgroup label="<?php esc_attr_e( 'Vistas con series (Barras Apiladas / Agrupadas)', 'sgr-suite' ); ?>">
                         <?php foreach ( $series_views as $vk => $vl ) : ?>
-                            <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $config['data_view'] ?? '', $vk ); ?>>
+                            <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $current_view, $vk ); ?>>
                                 <?php echo esc_html( $vl ); ?>
                             </option>
                         <?php endforeach; ?>
                         </optgroup>
                     </select>
-                    <p class="description"><?php esc_html_e( 'Las vistas con series son ideales para gráficos de Barras Apiladas o Agrupadas.', 'sgr-suite' ); ?></p>
+                    <p class="description"><?php esc_html_e( 'Las vistas con series son ideales para gráficos de Barras Apiladas o Agrupadas. Las vistas V-XX provienen del roadmap del API SGR y en su mayoría requieren el tipo de gráfico que las acompaña (scatter, stacked, etc).', 'sgr-suite' ); ?></p>
                 </td>
             </tr>
             <tr>

@@ -197,15 +197,24 @@ class SGR_Suite_Database {
 
     /**
      * Vaciar todas las tablas.
+     *
+     * Se usa DELETE FROM en vez de TRUNCATE porque TRUNCATE falla en tablas
+     * InnoDB que son referenciadas por claves foráneas, incluso con
+     * FOREIGN_KEY_CHECKS = 0.
      */
     public function truncate_tables(): void {
         global $wpdb;
 
         $wpdb->query( 'SET FOREIGN_KEY_CHECKS = 0' );
+
+        // Orden inverso al de creación (hijas primero) para respetar la cadena FK.
         $tables = [ 'imagenes', 'municipios', 'metas', 'contratos', 'proyectos' ];
         foreach ( $tables as $t ) {
-            $wpdb->query( "TRUNCATE TABLE {$this->table( $t )}" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            $table = $this->table( $t );
+            $wpdb->query( "DELETE FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            $wpdb->query( "ALTER TABLE {$table} AUTO_INCREMENT = 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         }
+
         $wpdb->query( 'SET FOREIGN_KEY_CHECKS = 1' );
 
         $this->logger->info( 'Todas las tablas del SGR fueron vaciadas.' );
@@ -423,25 +432,15 @@ class SGR_Suite_Database {
         $where_sql = ! empty( $where ) ? 'WHERE ' . implode( ' AND ', $where ) : '';
 
         $allowed_orderby = [ 'nombre_proyecto', 'numero_proyecto', 'valor_proyecto', 'total_contratos', 'fecha_importacion' ];
-        $orderby = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'nombre_proyecto';
-        $order   = strtoupper( $args['order'] ) === 'DESC' ? 'DESC' : 'ASC';
+        $orderby         = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'nombre_proyecto';
+        $order           = strtoupper( $args['order'] ) === 'DESC' ? 'DESC' : 'ASC';
 
-        $limit_sql = '';
-        if ( $args['limite'] > 0 ) {
-            $where[]   = '1=1'; // placeholder for prepare
-            $limit_sql = 'LIMIT %d OFFSET %d';
+        $query = "SELECT p.* FROM {$this->table('proyectos')} p {$where_sql} ORDER BY p.{$orderby} {$order}";
+
+        if ( (int) $args['limite'] > 0 ) {
+            $query    .= ' LIMIT %d OFFSET %d';
             $prepare[] = absint( $args['limite'] );
             $prepare[] = absint( $args['offset'] );
-            // Remove the placeholder
-            array_pop( $where );
-        }
-
-        // Rebuild where_sql after limit adjustments
-        $where_sql = ! empty( $where ) ? 'WHERE ' . implode( ' AND ', $where ) : '';
-
-        $query = "SELECT p.* FROM {$this->table('proyectos')} p {$where_sql} ORDER BY {$orderby} {$order}";
-        if ( ! empty( $limit_sql ) ) {
-            $query .= " {$limit_sql}";
         }
 
         if ( ! empty( $prepare ) ) {
@@ -792,11 +791,233 @@ class SGR_Suite_Database {
                               GROUP BY p.entidad_ejecutora_proyecto, p.dependencia_proyecto",
                 'columns' => [ 'label', 'series', 'value' ],
             ],
+
+            // =====================================================================
+            // VISTAS DE VIGENCIA (sgr_views.md V-04, V-05, V-15)
+            //
+            // La vigencia se deriva del prefijo BPIN numérico cuando existe; los
+            // proyectos IDSN/Infra sin año explícito se agrupan con etiquetas
+            // propias ('IDSN*', 'Infra*') para mantener la serie interpretable.
+            // =====================================================================
+
+            'vigencia_valor' => [
+                'label'   => 'V-04 · Inversión por Vigencia (BPIN año)',
+                'sql'     => "SELECT
+                                CASE
+                                    WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
+                                        THEN SUBSTRING(p.numero_proyecto, 1, 4)
+                                    WHEN p.dependencia_proyecto = 'IDSN' THEN 'IDSN*'
+                                    WHEN p.dependencia_proyecto = 'Infraestructura' THEN 'Infra*'
+                                    ELSE 'Otros*'
+                                END AS label,
+                                SUM(p.valor_proyecto) AS value,
+                                COUNT(*) AS count
+                              FROM {$this->table('proyectos')} p
+                              GROUP BY label",
+                'columns' => [ 'label', 'value', 'count' ],
+            ],
+
+            'vigencia_dependencia_x' => [
+                'label'   => 'V-05 · Inversión: Vigencia x Dependencia (Apiladas)',
+                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
+                                SELECT
+                                    CASE
+                                        WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
+                                            THEN SUBSTRING(p.numero_proyecto, 1, 4)
+                                        WHEN p.dependencia_proyecto = 'IDSN' THEN 'IDSN*'
+                                        WHEN p.dependencia_proyecto = 'Infraestructura' THEN 'Infra*'
+                                        ELSE 'Otros*'
+                                    END AS label,
+                                    p.dependencia_proyecto AS series,
+                                    SUM(p.valor_proyecto) AS value
+                                FROM {$this->table('proyectos')} p
+                                WHERE p.dependencia_proyecto != ''
+                                GROUP BY label, p.dependencia_proyecto
+                              ) sub",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+
+            'proyectos_vigencia_x_dependencia' => [
+                'label'   => 'V-05b · Proyectos: Vigencia x Dependencia (Agrupadas)',
+                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
+                                SELECT
+                                    CASE
+                                        WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
+                                            THEN SUBSTRING(p.numero_proyecto, 1, 4)
+                                        WHEN p.dependencia_proyecto = 'IDSN' THEN 'IDSN*'
+                                        WHEN p.dependencia_proyecto = 'Infraestructura' THEN 'Infra*'
+                                        ELSE 'Otros*'
+                                    END AS label,
+                                    p.dependencia_proyecto AS series,
+                                    COUNT(*) AS value
+                                FROM {$this->table('proyectos')} p
+                                WHERE p.dependencia_proyecto != ''
+                                GROUP BY label, p.dependencia_proyecto
+                              ) sub",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+
+            // =====================================================================
+            // VISTAS DE CONTRATOS: SCATTER, BOX Y RIESGO (V-07, V-08, V-19)
+            // =====================================================================
+
+            'scatter_valor_avance' => [
+                'label'   => 'V-08 · Scatter: Valor Contrato vs Avance Físico',
+                // x = valor, y = avance, series = dependencia, label = numero.
+                'sql'     => "SELECT
+                                c.numero_contrato AS label,
+                                p.dependencia_proyecto AS series,
+                                c.valor_contrato AS x,
+                                c.porcentaje_avance_fisico AS y,
+                                c.valor_contrato AS value
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE c.valor_contrato > 0
+                                AND p.dependencia_proyecto != ''",
+                'columns' => [ 'label', 'series', 'x', 'y', 'value' ],
+            ],
+
+            'avance_por_entidad' => [
+                'label'   => 'V-19 · Avance Físico por Entidad Ejecutora (Distribución)',
+                'sql'     => "SELECT
+                                p.entidad_ejecutora_proyecto AS label,
+                                p.entidad_ejecutora_proyecto AS series,
+                                c.porcentaje_avance_fisico AS value,
+                                c.numero_contrato AS detalle
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.entidad_ejecutora_proyecto != ''
+                                AND c.porcentaje_avance_fisico IS NOT NULL",
+                'columns' => [ 'label', 'series', 'value', 'detalle' ],
+            ],
+
+            'avance_por_dependencia_promedio' => [
+                'label'   => 'V-07b · Avance Físico Promedio por Dependencia',
+                'sql'     => "SELECT
+                                p.dependencia_proyecto AS label,
+                                ROUND(AVG(c.porcentaje_avance_fisico), 2) AS value,
+                                COUNT(c.id) AS count
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY p.dependencia_proyecto",
+                'columns' => [ 'label', 'value', 'count' ],
+            ],
+
+            'distribucion_riesgo_contratos' => [
+                'label'   => 'V-08b · Distribución de Riesgo de Contratos (Pie/Donut)',
+                // Criterios: bajo = avance >= 50%, medio = 10-49%, alto = < 10% con valor alto.
+                'sql'     => "SELECT
+                                CASE
+                                    WHEN c.porcentaje_avance_fisico >= 50 THEN 'Riesgo bajo'
+                                    WHEN c.porcentaje_avance_fisico >= 10 THEN 'Riesgo medio'
+                                    ELSE 'Riesgo alto'
+                                END AS label,
+                                COUNT(*) AS value,
+                                SUM(c.valor_contrato) AS total_valor
+                              FROM {$this->table('contratos')} c
+                              WHERE c.valor_contrato > 0
+                              GROUP BY label",
+                'columns' => [ 'label', 'value', 'total_valor' ],
+            ],
+
+            // =====================================================================
+            // RANKING TEMPORAL (V-15, inspirado en BumpChart)
+            // =====================================================================
+
+            'ranking_dependencias_vigencia' => [
+                'label'   => 'V-15 · Ranking de Dependencias por Vigencia',
+                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
+                                SELECT
+                                    CASE
+                                        WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
+                                            THEN SUBSTRING(p.numero_proyecto, 1, 4)
+                                        ELSE 'Sin vigencia'
+                                    END AS label,
+                                    p.dependencia_proyecto AS series,
+                                    COUNT(*) AS value
+                                FROM {$this->table('proyectos')} p
+                                WHERE p.dependencia_proyecto != ''
+                                  AND p.numero_proyecto REGEXP '^[0-9]{4}'
+                                GROUP BY label, p.dependencia_proyecto
+                              ) sub",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+
+            // =====================================================================
+            // MATRIZ MUNICIPIO × DEPENDENCIA (V-14)
+            // =====================================================================
+
+            'matrix_municipio_dependencia' => [
+                'label'   => 'V-14 · Matriz: Municipio x Dependencia (contratos)',
+                'sql'     => "SELECT
+                                m.nombre AS label,
+                                p.dependencia_proyecto AS series,
+                                COUNT(DISTINCT c.id) AS value,
+                                SUM(c.valor_contrato) AS total_valor
+                              FROM {$this->table('municipios')} m
+                              INNER JOIN {$this->table('contratos')} c ON m.contrato_id = c.id
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY m.nombre, p.dependencia_proyecto",
+                'columns' => [ 'label', 'series', 'value', 'total_valor' ],
+            ],
+
+            // =====================================================================
+            // VISTAS DE GEOMAP (V-12, V-13)
+            //
+            // Estas vistas retornan filas CRUDAS (una por registro en la tabla
+            // municipios). La agregación a nivel DIVIPOLA la ejecuta el
+            // post-procesador en execute_chart_view() usando el normalizador
+            // (class-municipios-normalizer.php) contra el lookup canónico de
+            // los 64 municipios de Nariño.
+            // =====================================================================
+
+            'geomap_valor_municipio' => [
+                'label'         => 'V-13 · Geomap: Inversión por Municipio',
+                'sql'           => "SELECT
+                                        m.nombre AS nombre_raw,
+                                        c.id AS contrato_id,
+                                        c.valor_contrato AS valor_contrato,
+                                        COALESCE(m.poblacion_beneficiada, 0) AS poblacion,
+                                        p.dependencia_proyecto AS dependencia
+                                      FROM {$this->table('municipios')} m
+                                      INNER JOIN {$this->table('contratos')} c ON m.contrato_id = c.id
+                                      INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                                      WHERE m.nombre != ''",
+                'columns'       => [ 'id', 'label', 'value', 'count', 'poblacion' ],
+                'post_process'  => 'geomap_aggregate_valor',
+            ],
+
+            'geomap_contratos_municipio' => [
+                'label'         => 'V-12 · Geomap: Contratos por Municipio',
+                'sql'           => "SELECT
+                                        m.nombre AS nombre_raw,
+                                        c.id AS contrato_id,
+                                        COALESCE(m.poblacion_beneficiada, 0) AS poblacion,
+                                        c.porcentaje_avance_fisico AS avance,
+                                        p.dependencia_proyecto AS dependencia
+                                      FROM {$this->table('municipios')} m
+                                      INNER JOIN {$this->table('contratos')} c ON m.contrato_id = c.id
+                                      INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                                      WHERE m.nombre != ''",
+                'columns'       => [ 'id', 'label', 'value', 'count', 'avance' ],
+                'post_process'  => 'geomap_aggregate_contratos',
+            ],
         ];
     }
 
     /**
      * Ejecutar una vista de gráfico predefinida con límite opcional.
+     *
+     * Cuando la vista no contiene un ORDER BY explícito, se intenta ordenar
+     * por la columna `value`. Para vistas tipo scatter (con columnas `x`/`y`)
+     * se ordena por `x` para preservar la progresión natural.
+     *
+     * Si la vista declara un `post_process`, se ejecuta sobre los resultados
+     * crudos y se ignora el LIMIT por SQL: el tope se aplica tras la
+     * agregación en PHP (las vistas geomap pueden tener 64 municipios pero
+     * requieren barrer todas las filas para agregar correctamente).
      */
     public function execute_chart_view( string $view_key, int $limit = 20, string $order_dir = 'DESC' ): array {
         global $wpdb;
@@ -806,21 +1027,155 @@ class SGR_Suite_Database {
             return [];
         }
 
-        $view = $views[ $view_key ];
-        $sql  = $view['sql'];
+        $view         = $views[ $view_key ];
+        $sql          = $view['sql'];
+        $columns      = $view['columns'] ?? [];
+        $post_process = $view['post_process'] ?? null;
 
         $order_dir = strtoupper( $order_dir ) === 'ASC' ? 'ASC' : 'DESC';
 
-        // Solo agregar ORDER BY si la vista no lo tiene ya
-        if ( stripos( $sql, 'ORDER BY' ) === false ) {
-            $sql .= " ORDER BY value {$order_dir}";
+        // Las vistas con post_process (geomap) necesitan todas las filas; se
+        // aplica un tope alto a nivel SQL y un tope final en PHP.
+        if ( $post_process ) {
+            $sql .= ' LIMIT 5000';
+            $raw  = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            $raw  = is_array( $raw ) ? $raw : [];
+            return $this->apply_post_process( $post_process, $raw, $limit, $order_dir );
         }
 
-        $limit = min( max( 1, $limit ), 500 );
+        // Sólo agregar ORDER BY si la vista no lo tiene ya.
+        if ( stripos( $sql, 'ORDER BY' ) === false ) {
+            if ( in_array( 'x', $columns, true ) && in_array( 'y', $columns, true ) ) {
+                // Scatter: orden natural por x ascendente (o descendente si se pidió).
+                $sql .= " ORDER BY x {$order_dir}";
+            } elseif ( in_array( 'value', $columns, true ) ) {
+                $sql .= " ORDER BY value {$order_dir}";
+            }
+        }
+
+        // Vistas con muchos registros individuales (scatter / distribuciones)
+        // usan un tope más alto porque cada fila es un dato atómico.
+        $hard_cap = 500;
+        if ( in_array( $view_key, [ 'scatter_valor_avance', 'avance_por_entidad', 'matrix_municipio_dependencia' ], true ) ) {
+            $hard_cap = 1000;
+        }
+        $limit = min( max( 1, $limit ), $hard_cap );
         $sql  .= $wpdb->prepare( ' LIMIT %d', $limit );
 
         $results = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 
         return is_array( $results ) ? $results : [];
+    }
+
+    /**
+     * Despachar un post-procesador por clave.
+     */
+    private function apply_post_process( string $key, array $rows, int $limit, string $order_dir ): array {
+        switch ( $key ) {
+            case 'geomap_aggregate_valor':
+                return $this->geomap_aggregate( $rows, 'valor', $limit, $order_dir );
+            case 'geomap_aggregate_contratos':
+                return $this->geomap_aggregate( $rows, 'contratos', $limit, $order_dir );
+        }
+        return $rows;
+    }
+
+    /**
+     * Agregar filas crudas de municipios a nivel DIVIPOLA usando el
+     * normalizador canónico. Devuelve una fila por municipio con
+     * `id` = DIVIPOLA (clave para d3plus Geomap), `label` = nombre
+     * canónico, `value` = métrica principal (valor o contratos), y
+     * metadatos auxiliares.
+     *
+     * @param array<int,array<string,mixed>> $rows
+     * @return array<int,array<string,mixed>>
+     */
+    private function geomap_aggregate( array $rows, string $metric, int $limit, string $order_dir ): array {
+        if ( empty( $rows ) || ! class_exists( 'SGR_Suite_Municipios_Normalizer' ) ) {
+            return [];
+        }
+
+        $agg = []; // DIVIPOLA => accumulator.
+
+        foreach ( $rows as $row ) {
+            $raw = (string) ( $row['nombre_raw'] ?? '' );
+            if ( '' === $raw ) {
+                continue;
+            }
+
+            $matches = SGR_Suite_Municipios_Normalizer::resolve( $raw );
+            if ( empty( $matches ) ) {
+                continue;
+            }
+
+            $valor       = (float) ( $row['valor_contrato'] ?? 0 );
+            $poblacion   = (int) ( $row['poblacion'] ?? 0 );
+            $avance      = isset( $row['avance'] ) ? (float) $row['avance'] : null;
+            $dependencia = (string) ( $row['dependencia'] ?? '' );
+            $contrato_id = (int) ( $row['contrato_id'] ?? 0 );
+
+            foreach ( $matches as $muni ) {
+                $key = $muni['divipola'];
+                if ( ! isset( $agg[ $key ] ) ) {
+                    $agg[ $key ] = [
+                        'id'           => $key,
+                        'label'        => $muni['nombre'],
+                        'value'        => 0.0,
+                        'valor_total'  => 0.0,
+                        'contratos'    => 0,
+                        'poblacion'    => 0,
+                        'avance_sum'   => 0.0,
+                        'avance_n'     => 0,
+                        '_contratos'   => [],
+                        'dependencias' => [],
+                    ];
+                }
+                // Evitar contar un mismo contrato dos veces para el mismo municipio.
+                if ( $contrato_id > 0 && ! isset( $agg[ $key ]['_contratos'][ $contrato_id ] ) ) {
+                    $agg[ $key ]['_contratos'][ $contrato_id ] = true;
+                    $agg[ $key ]['contratos']++;
+                    $agg[ $key ]['valor_total'] += $valor;
+                    if ( null !== $avance ) {
+                        $agg[ $key ]['avance_sum'] += $avance;
+                        $agg[ $key ]['avance_n']++;
+                    }
+                }
+                $agg[ $key ]['poblacion'] += $poblacion;
+                if ( '' !== $dependencia ) {
+                    $agg[ $key ]['dependencias'][ $dependencia ] = true;
+                }
+            }
+        }
+
+        // Finalizar: elegir la métrica principal, calcular promedios, limpiar
+        // claves internas y redondear.
+        $out = [];
+        foreach ( $agg as $entry ) {
+            $avance_avg = $entry['avance_n'] > 0 ? round( $entry['avance_sum'] / $entry['avance_n'], 2 ) : 0;
+            $entry['avance_promedio'] = $avance_avg;
+            $entry['dependencias']    = array_keys( $entry['dependencias'] );
+            $entry['value']           = 'valor' === $metric ? (float) $entry['valor_total'] : (int) $entry['contratos'];
+            unset( $entry['avance_sum'], $entry['avance_n'], $entry['_contratos'] );
+            $out[] = $entry;
+        }
+
+        // Ordenar por value y aplicar tope en PHP.
+        usort(
+            $out,
+            static function ( $a, $b ) use ( $order_dir ) {
+                $va = (float) ( $a['value'] ?? 0 );
+                $vb = (float) ( $b['value'] ?? 0 );
+                if ( $va === $vb ) {
+                    return 0;
+                }
+                if ( 'ASC' === $order_dir ) {
+                    return $va < $vb ? -1 : 1;
+                }
+                return $va > $vb ? -1 : 1;
+            }
+        );
+
+        $hard_cap = max( 1, min( $limit, 64 ) );
+        return array_slice( $out, 0, $hard_cap );
     }
 }

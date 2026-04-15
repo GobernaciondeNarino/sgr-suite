@@ -25,12 +25,16 @@
             this.bindChartTypeSelection();
             this.bindColorPreview();
             this.bindPreviewButton();
+            this.bindCompatibilityFilter();
 
             // Trigger initial color swatch render if colors already set
             var $colors = $('#sgr-colors');
             if ($colors.length && $colors.val()) {
                 $colors.trigger('input');
             }
+
+            // Aplicar filtro inicial según el tipo de gráfico seleccionado.
+            this.applyCompatibilityFilter();
         },
 
         /* ===========================================
@@ -40,17 +44,98 @@
         /**
          * When a chart type radio is selected, add .selected class
          * to the parent option label and remove it from siblings.
+         * Además, re-aplica el filtro de compatibilidad sobre el selector
+         * de vistas de datos.
          */
         bindChartTypeSelection: function () {
+            var self = this;
             $(document).on('change', '.sgr-chart-type-option input[type="radio"]', function () {
                 $('.sgr-chart-type-option').removeClass('selected');
                 $(this).closest('.sgr-chart-type-option').addClass('selected');
+                self.applyCompatibilityFilter();
             });
 
             // Ensure the initially checked option is highlighted on page load
             $('.sgr-chart-type-option input[type="radio"]:checked').each(function () {
                 $(this).closest('.sgr-chart-type-option').addClass('selected');
             });
+        },
+
+        /* ===========================================
+           Compatibility Filter (chart type ↔ data view)
+           =========================================== */
+
+        /**
+         * Cuando se elige un tipo de gráfico (p.ej., geomap), se deben
+         * ocultar las vistas del selector que no son compatibles con ese
+         * tipo. La matriz de compatibilidad llega desde PHP via
+         * sgrChartsAdmin.compatibility: { view_key: [chart_type,...] }.
+         * Las vistas que no aparecen en el mapa se consideran compatibles
+         * con todos los tipos (fallback permisivo).
+         */
+        bindCompatibilityFilter: function () {
+            var self = this;
+            $(document).on('change', '#sgr-data-view', function () {
+                self.applyCompatibilityFilter();
+            });
+        },
+
+        applyCompatibilityFilter: function () {
+            var matrix = (sgrChartsAdmin && sgrChartsAdmin.compatibility) || {};
+            var $chartTypeChecked = $('.sgr-chart-type-option input[type="radio"]:checked');
+            if (!$chartTypeChecked.length) {
+                return;
+            }
+            var currentType = $chartTypeChecked.val();
+
+            var $select = $('#sgr-data-view');
+            if (!$select.length) {
+                return;
+            }
+
+            var $options = $select.find('option');
+            var currentlySelected = $select.val();
+            var firstValidOption = null;
+            var selectedStillValid = false;
+
+            $options.each(function () {
+                var opt = this;
+                var $opt = $(opt);
+                var key = $opt.val();
+                var allowed = matrix[key];
+                var isCompatible = !allowed || allowed.indexOf(currentType) !== -1;
+
+                if (isCompatible) {
+                    opt.disabled = false;
+                    opt.hidden = false;
+                    if (firstValidOption === null) {
+                        firstValidOption = key;
+                    }
+                    if (key === currentlySelected) {
+                        selectedStillValid = true;
+                    }
+                } else {
+                    opt.disabled = true;
+                    opt.hidden = true;
+                }
+            });
+
+            // Ocultar también los optgroup que quedaron totalmente vacíos.
+            $select.find('optgroup').each(function () {
+                var group = this;
+                var visibleCount = $(group).find('option').filter(function () { return !this.hidden; }).length;
+                group.disabled = visibleCount === 0;
+                group.hidden = visibleCount === 0;
+            });
+
+            // Si la vista actualmente seleccionada es incompatible, saltar
+            // automáticamente a la primera opción válida.
+            if (!selectedStillValid && firstValidOption !== null) {
+                $select.val(firstValidOption).trigger('change');
+                if (window.console) {
+                    window.console.info('[SGR] Vista cambiada a la primera compatible con ' + currentType + ': ' + firstValidOption);
+                }
+            }
         },
 
         /* ===========================================

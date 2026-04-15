@@ -102,6 +102,10 @@ class SGR_Suite_Card_Customizer {
 
     /**
      * Sanitizar settings.
+     *
+     * Los valores CSS (sombras y radios) se limitan a un conjunto restringido
+     * de caracteres para impedir la inyección de reglas CSS adicionales
+     * (por ejemplo `}body{display:none;`).
      */
     public function sanitize_settings( $input ): array {
         if ( ! is_array( $input ) ) {
@@ -119,15 +123,54 @@ class SGR_Suite_Card_Customizer {
             } elseif ( str_ends_with( $key, '_url' ) ) {
                 $sanitized[ $key ] = esc_url_raw( $val ) ?: $default;
             } elseif ( in_array( $key, [ 'card_shadow', 'card_hover_shadow' ], true ) ) {
-                $sanitized[ $key ] = sanitize_text_field( $val );
+                $sanitized[ $key ] = $this->sanitize_css_shadow( $val, $default );
             } elseif ( $key === 'card_border_radius' || $key === 'badge_border_radius' ) {
-                $sanitized[ $key ] = sanitize_text_field( $val );
+                $sanitized[ $key ] = $this->sanitize_css_length( $val, $default );
             } else {
                 $sanitized[ $key ] = is_numeric( $val ) ? $val : $default;
             }
         }
 
         return $sanitized;
+    }
+
+    /**
+     * Sanear un valor de box-shadow limitando a caracteres seguros.
+     *
+     * Se permite: dígitos, signos, unidades (px/em/rem/%), espacios, puntos,
+     * coma, paréntesis (rgba()), # (hex) y la palabra clave 'none'/'inset'.
+     * Bloquea `{`, `}`, `;`, `:` y comillas que permitirían romper la regla.
+     */
+    private function sanitize_css_shadow( $val, string $default ): string {
+        $val = (string) $val;
+        if ( '' === trim( $val ) ) {
+            return $default;
+        }
+        // Permite letras para 'none', 'inset', 'rgba', etc.
+        if ( ! preg_match( '/^[\w\s\.\,\-\+\#\(\)\%]+$/u', $val ) ) {
+            return $default;
+        }
+        // Blindaje adicional contra separadores de reglas CSS.
+        if ( preg_match( '/[{};:@\\\\]/', $val ) ) {
+            return $default;
+        }
+        return sanitize_text_field( $val );
+    }
+
+    /**
+     * Sanear un valor de longitud CSS (radio, etc).
+     *
+     * Acepta sólo números opcionalmente seguidos de una unidad válida.
+     */
+    private function sanitize_css_length( $val, string $default ): string {
+        $val = trim( (string) $val );
+        if ( '' === $val ) {
+            return $default;
+        }
+        if ( preg_match( '/^-?\d+(?:\.\d+)?(px|em|rem|%)?$/', $val ) ) {
+            return $val;
+        }
+        return $default;
     }
 
     /**
