@@ -298,6 +298,12 @@
                     case 'geomap':
                         // Geomap Nariño: requiere topojson local + data con
                         // columna `id` = DIVIPOLA (la agregación la hace PHP).
+                        //
+                        // Preparación del topojson: cada geometría tiene ya
+                        // feature.id = DIVIPOLA (normalizado offline), así que
+                        // podemos usar la configuración por defecto de
+                        // d3plus-geomap sin topojsonId/topojsonFilter (evitando
+                        // bugs de short-circuit y diferencias entre versiones).
                         if (!d3p.Geomap) {
                             this.showError(uid, 'Geomap no disponible en esta versión de D3plus.');
                             return;
@@ -309,40 +315,77 @@
                             this.showError(uid, 'No se encontró el topojson de municipios.');
                             return;
                         }
+
+                        // Asegurar que data[i].id sea string (los IDs del
+                        // topojson son strings; un int no hace match).
+                        data.forEach(function (d) {
+                            if (d && d.id != null) {
+                                d.id = String(d.id);
+                            }
+                        });
+
+                        // Paleta secuencial por defecto si no se configuró una.
+                        var geomapPalette = (config.colors && config.colors.length >= 3)
+                            ? config.colors
+                            : ['#eff6ff', '#bfdbfe', '#60a5fa', '#2563eb', '#1e3a8a'];
+
+                        // Construcción defensiva: algunos métodos (fitFilter,
+                        // topojsonId, ocean, tiles) pueden no estar expuestos
+                        // en todas las variantes del bundle. Se aplican con
+                        // detección de tipo para no romper la cadena.
                         chart = new d3p.Geomap()
-                            .select(selector).data(data)
+                            .select(selector)
+                            .data(data)
                             .groupBy('id')
                             .colorScale('value')
                             .colorScaleConfig({
-                                color: (config.colors && config.colors.length)
-                                    ? config.colors
-                                    : ['#eff6ff', '#bfdbfe', '#60a5fa', '#2563eb', '#1e3a8a']
+                                color: geomapPalette,
+                                legendConfig: {
+                                    label: function (d) {
+                                        return formatNumber(d, numFormat);
+                                    }
+                                }
                             })
                             .colorScalePosition('bottom')
-                            .topojson(topoUrl)
-                            .topojsonFilter(function (d) {
-                                // Filtrar sólo los features del departamento de Nariño (52xxx).
-                                var id = (d && (d.id || (d.properties && d.properties.divipola))) || '';
-                                return String(id).charAt(0) === '5';
-                            })
-                            .topojsonId(function (d) {
-                                return d && d.properties ? d.properties.divipola : d.id;
-                            })
-                            .topojsonKey('municipios')
-                            .tooltipConfig({
-                                title: function (d) { return d && d.label ? String(d.label) : ''; },
+                            .topojson(topoUrl);
+
+                        if (typeof chart.topojsonId === 'function') {
+                            // Por defecto d3plus usa feature.id; lo declaramos
+                            // explícitamente igual para mayor claridad.
+                            chart.topojsonId('id');
+                        }
+                        if (typeof chart.tiles === 'function') {
+                            chart.tiles(true);
+                        }
+                        if (typeof chart.ocean === 'function') {
+                            chart.ocean('transparent');
+                        }
+                        if (typeof chart.fitFilter === 'function') {
+                            // Encuadre sólo por features con DIVIPOLA 52xxx (todos
+                            // los nuestros) — útil si algún día añadimos más departamentos.
+                            chart.fitFilter(function (d) {
+                                var fid = d && d.id != null ? String(d.id) : '';
+                                return fid.length === 5 && fid.substring(0, 2) === '52';
+                            });
+                        }
+
+                        chart.tooltipConfig({
+                                title: function (d) {
+                                    return d && d.label ? String(d.label) : '';
+                                },
                                 body: function (d) {
-                                    if (!d) return '';
-                                    var val     = formatNumber(d.value, numFormat);
+                                    if (!d) return '<em>Sin datos</em>';
                                     var metric  = (config.data_view && config.data_view.indexOf('contratos') !== -1)
                                         ? 'Contratos'
                                         : 'Valor';
                                     var lines = [];
-                                    lines.push('<strong>' + metric + ':</strong> ' + val);
-                                    if (d.contratos != null) {
+                                    if (d.value != null) {
+                                        lines.push('<strong>' + metric + ':</strong> ' + formatNumber(d.value, numFormat));
+                                    }
+                                    if (d.contratos != null && metric !== 'Contratos') {
                                         lines.push('<strong>Contratos:</strong> ' + d.contratos);
                                     }
-                                    if (d.valor_total != null) {
+                                    if (d.valor_total != null && metric === 'Contratos') {
                                         lines.push('<strong>Valor total:</strong> ' + formatNumber(d.valor_total, numFormat));
                                     }
                                     if (d.poblacion != null && d.poblacion > 0) {
@@ -351,7 +394,10 @@
                                     if (d.avance_promedio != null && d.avance_promedio > 0) {
                                         lines.push('<strong>Avance promedio:</strong> ' + d.avance_promedio + '%');
                                     }
-                                    return lines.join('<br/>');
+                                    if (d.dependencias && d.dependencias.length) {
+                                        lines.push('<strong>Dependencias:</strong> ' + d.dependencias.join(', '));
+                                    }
+                                    return lines.length ? lines.join('<br/>') : '<em>Sin contratos registrados</em>';
                                 }
                             });
                         break;

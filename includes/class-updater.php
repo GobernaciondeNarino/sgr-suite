@@ -101,5 +101,21 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.3.0: geomap de Nariño (topojson + vistas V-12/V-13).' );
         }
+
+        // v2.3.1: Fix del renderizado del geomap.
+        //  - Topojson normalizado: feature.id = DIVIPOLA (antes venía
+        //    como nombre ASCII "SANDONA"), lo que rompía el join con
+        //    los datos.
+        //  - Eliminados topojsonFilter/Key/Id-función problemáticos
+        //    (el short-circuit `d.id || d.properties.divipola` filtraba
+        //    todos los features). Se usa la configuración por defecto de
+        //    d3plus-geomap con topojsonId='id'.
+        //  - Construcción defensiva con detección de método
+        //    (fitFilter/tiles/ocean) para sobrevivir variantes del bundle.
+        //  - Cast explícito de data[i].id a string en el renderer.
+        if ( version_compare( $from_version, '2.3.1', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.3.1: fix del join topojson↔data en el geomap.' );
+        }
     }
 }
