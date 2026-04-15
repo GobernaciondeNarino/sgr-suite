@@ -295,6 +295,67 @@
                             .shapeConfig({fill: colorFn});
                         break;
 
+                    case 'geomap':
+                        // Geomap Nariño: requiere topojson local + data con
+                        // columna `id` = DIVIPOLA (la agregación la hace PHP).
+                        if (!d3p.Geomap) {
+                            this.showError(uid, 'Geomap no disponible en esta versión de D3plus.');
+                            return;
+                        }
+                        var topoUrl = (typeof window.sgrCharts !== 'undefined' && window.sgrCharts.topojsonUrl)
+                            ? window.sgrCharts.topojsonUrl
+                            : '';
+                        if (!topoUrl) {
+                            this.showError(uid, 'No se encontró el topojson de municipios.');
+                            return;
+                        }
+                        chart = new d3p.Geomap()
+                            .select(selector).data(data)
+                            .groupBy('id')
+                            .colorScale('value')
+                            .colorScaleConfig({
+                                color: (config.colors && config.colors.length)
+                                    ? config.colors
+                                    : ['#eff6ff', '#bfdbfe', '#60a5fa', '#2563eb', '#1e3a8a']
+                            })
+                            .colorScalePosition('bottom')
+                            .topojson(topoUrl)
+                            .topojsonFilter(function (d) {
+                                // Filtrar sólo los features del departamento de Nariño (52xxx).
+                                var id = (d && (d.id || (d.properties && d.properties.divipola))) || '';
+                                return String(id).charAt(0) === '5';
+                            })
+                            .topojsonId(function (d) {
+                                return d && d.properties ? d.properties.divipola : d.id;
+                            })
+                            .topojsonKey('municipios')
+                            .tooltipConfig({
+                                title: function (d) { return d && d.label ? String(d.label) : ''; },
+                                body: function (d) {
+                                    if (!d) return '';
+                                    var val     = formatNumber(d.value, numFormat);
+                                    var metric  = (config.data_view && config.data_view.indexOf('contratos') !== -1)
+                                        ? 'Contratos'
+                                        : 'Valor';
+                                    var lines = [];
+                                    lines.push('<strong>' + metric + ':</strong> ' + val);
+                                    if (d.contratos != null) {
+                                        lines.push('<strong>Contratos:</strong> ' + d.contratos);
+                                    }
+                                    if (d.valor_total != null) {
+                                        lines.push('<strong>Valor total:</strong> ' + formatNumber(d.valor_total, numFormat));
+                                    }
+                                    if (d.poblacion != null && d.poblacion > 0) {
+                                        lines.push('<strong>Población beneficiada:</strong> ' + formatNumber(d.poblacion, 'colombiano'));
+                                    }
+                                    if (d.avance_promedio != null && d.avance_promedio > 0) {
+                                        lines.push('<strong>Avance promedio:</strong> ' + d.avance_promedio + '%');
+                                    }
+                                    return lines.join('<br/>');
+                                }
+                            });
+                        break;
+
                     default:
                         chart = new d3p.BarChart()
                             .select(selector).data(data)

@@ -86,5 +86,20 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.2.0: nuevas vistas (V-04, V-05, V-08, V-14, V-15, V-19) y scatter chart.' );
         }
+
+        // v2.3.0: Geomap de Nariño (V-12 y V-13).
+        //  - Topojson + lookup de DIVIPOLA copiados desde tic-suite
+        //    (data/topo/narino_municipios.topojson, .lookup.json).
+        //  - Normalizador PHP que resuelve variantes ("Alban / San José",
+        //    "Los Andes Sotomayor", "San Juan de Pasto", listas separadas
+        //    por coma, etc.) a los 64 municipios canónicos.
+        //  - Vistas geomap_valor_municipio y geomap_contratos_municipio
+        //    con post-procesamiento en PHP (agregación por DIVIPOLA).
+        //  - Nuevo tipo de gráfico "geomap" (D3plus v2 Geomap).
+        //  - Filtro vista ↔ tipo de gráfico en el editor del admin.
+        if ( version_compare( $from_version, '2.3.0', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.3.0: geomap de Nariño (topojson + vistas V-12/V-13).' );
+        }
     }
 }
