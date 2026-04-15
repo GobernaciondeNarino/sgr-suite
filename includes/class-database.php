@@ -791,11 +791,186 @@ class SGR_Suite_Database {
                               GROUP BY p.entidad_ejecutora_proyecto, p.dependencia_proyecto",
                 'columns' => [ 'label', 'series', 'value' ],
             ],
+
+            // =====================================================================
+            // VISTAS DE VIGENCIA (sgr_views.md V-04, V-05, V-15)
+            //
+            // La vigencia se deriva del prefijo BPIN numérico cuando existe; los
+            // proyectos IDSN/Infra sin año explícito se agrupan con etiquetas
+            // propias ('IDSN*', 'Infra*') para mantener la serie interpretable.
+            // =====================================================================
+
+            'vigencia_valor' => [
+                'label'   => 'V-04 · Inversión por Vigencia (BPIN año)',
+                'sql'     => "SELECT
+                                CASE
+                                    WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
+                                        THEN SUBSTRING(p.numero_proyecto, 1, 4)
+                                    WHEN p.dependencia_proyecto = 'IDSN' THEN 'IDSN*'
+                                    WHEN p.dependencia_proyecto = 'Infraestructura' THEN 'Infra*'
+                                    ELSE 'Otros*'
+                                END AS label,
+                                SUM(p.valor_proyecto) AS value,
+                                COUNT(*) AS count
+                              FROM {$this->table('proyectos')} p
+                              GROUP BY label",
+                'columns' => [ 'label', 'value', 'count' ],
+            ],
+
+            'vigencia_dependencia_x' => [
+                'label'   => 'V-05 · Inversión: Vigencia x Dependencia (Apiladas)',
+                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
+                                SELECT
+                                    CASE
+                                        WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
+                                            THEN SUBSTRING(p.numero_proyecto, 1, 4)
+                                        WHEN p.dependencia_proyecto = 'IDSN' THEN 'IDSN*'
+                                        WHEN p.dependencia_proyecto = 'Infraestructura' THEN 'Infra*'
+                                        ELSE 'Otros*'
+                                    END AS label,
+                                    p.dependencia_proyecto AS series,
+                                    SUM(p.valor_proyecto) AS value
+                                FROM {$this->table('proyectos')} p
+                                WHERE p.dependencia_proyecto != ''
+                                GROUP BY label, p.dependencia_proyecto
+                              ) sub",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+
+            'proyectos_vigencia_x_dependencia' => [
+                'label'   => 'V-05b · Proyectos: Vigencia x Dependencia (Agrupadas)',
+                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
+                                SELECT
+                                    CASE
+                                        WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
+                                            THEN SUBSTRING(p.numero_proyecto, 1, 4)
+                                        WHEN p.dependencia_proyecto = 'IDSN' THEN 'IDSN*'
+                                        WHEN p.dependencia_proyecto = 'Infraestructura' THEN 'Infra*'
+                                        ELSE 'Otros*'
+                                    END AS label,
+                                    p.dependencia_proyecto AS series,
+                                    COUNT(*) AS value
+                                FROM {$this->table('proyectos')} p
+                                WHERE p.dependencia_proyecto != ''
+                                GROUP BY label, p.dependencia_proyecto
+                              ) sub",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+
+            // =====================================================================
+            // VISTAS DE CONTRATOS: SCATTER, BOX Y RIESGO (V-07, V-08, V-19)
+            // =====================================================================
+
+            'scatter_valor_avance' => [
+                'label'   => 'V-08 · Scatter: Valor Contrato vs Avance Físico',
+                // x = valor, y = avance, series = dependencia, label = numero.
+                'sql'     => "SELECT
+                                c.numero_contrato AS label,
+                                p.dependencia_proyecto AS series,
+                                c.valor_contrato AS x,
+                                c.porcentaje_avance_fisico AS y,
+                                c.valor_contrato AS value
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE c.valor_contrato > 0
+                                AND p.dependencia_proyecto != ''",
+                'columns' => [ 'label', 'series', 'x', 'y', 'value' ],
+            ],
+
+            'avance_por_entidad' => [
+                'label'   => 'V-19 · Avance Físico por Entidad Ejecutora (Distribución)',
+                'sql'     => "SELECT
+                                p.entidad_ejecutora_proyecto AS label,
+                                p.entidad_ejecutora_proyecto AS series,
+                                c.porcentaje_avance_fisico AS value,
+                                c.numero_contrato AS detalle
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.entidad_ejecutora_proyecto != ''
+                                AND c.porcentaje_avance_fisico IS NOT NULL",
+                'columns' => [ 'label', 'series', 'value', 'detalle' ],
+            ],
+
+            'avance_por_dependencia_promedio' => [
+                'label'   => 'V-07b · Avance Físico Promedio por Dependencia',
+                'sql'     => "SELECT
+                                p.dependencia_proyecto AS label,
+                                ROUND(AVG(c.porcentaje_avance_fisico), 2) AS value,
+                                COUNT(c.id) AS count
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY p.dependencia_proyecto",
+                'columns' => [ 'label', 'value', 'count' ],
+            ],
+
+            'distribucion_riesgo_contratos' => [
+                'label'   => 'V-08b · Distribución de Riesgo de Contratos (Pie/Donut)',
+                // Criterios: bajo = avance >= 50%, medio = 10-49%, alto = < 10% con valor alto.
+                'sql'     => "SELECT
+                                CASE
+                                    WHEN c.porcentaje_avance_fisico >= 50 THEN 'Riesgo bajo'
+                                    WHEN c.porcentaje_avance_fisico >= 10 THEN 'Riesgo medio'
+                                    ELSE 'Riesgo alto'
+                                END AS label,
+                                COUNT(*) AS value,
+                                SUM(c.valor_contrato) AS total_valor
+                              FROM {$this->table('contratos')} c
+                              WHERE c.valor_contrato > 0
+                              GROUP BY label",
+                'columns' => [ 'label', 'value', 'total_valor' ],
+            ],
+
+            // =====================================================================
+            // RANKING TEMPORAL (V-15, inspirado en BumpChart)
+            // =====================================================================
+
+            'ranking_dependencias_vigencia' => [
+                'label'   => 'V-15 · Ranking de Dependencias por Vigencia',
+                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
+                                SELECT
+                                    CASE
+                                        WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
+                                            THEN SUBSTRING(p.numero_proyecto, 1, 4)
+                                        ELSE 'Sin vigencia'
+                                    END AS label,
+                                    p.dependencia_proyecto AS series,
+                                    COUNT(*) AS value
+                                FROM {$this->table('proyectos')} p
+                                WHERE p.dependencia_proyecto != ''
+                                  AND p.numero_proyecto REGEXP '^[0-9]{4}'
+                                GROUP BY label, p.dependencia_proyecto
+                              ) sub",
+                'columns' => [ 'label', 'series', 'value' ],
+            ],
+
+            // =====================================================================
+            // MATRIZ MUNICIPIO × DEPENDENCIA (V-14)
+            // =====================================================================
+
+            'matrix_municipio_dependencia' => [
+                'label'   => 'V-14 · Matriz: Municipio x Dependencia (contratos)',
+                'sql'     => "SELECT
+                                m.nombre AS label,
+                                p.dependencia_proyecto AS series,
+                                COUNT(DISTINCT c.id) AS value,
+                                SUM(c.valor_contrato) AS total_valor
+                              FROM {$this->table('municipios')} m
+                              INNER JOIN {$this->table('contratos')} c ON m.contrato_id = c.id
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY m.nombre, p.dependencia_proyecto",
+                'columns' => [ 'label', 'series', 'value', 'total_valor' ],
+            ],
         ];
     }
 
     /**
      * Ejecutar una vista de gráfico predefinida con límite opcional.
+     *
+     * Cuando la vista no contiene un ORDER BY explícito, se intenta ordenar
+     * por la columna `value`. Para vistas tipo scatter (con columnas `x`/`y`)
+     * se ordena por `x` para preservar la progresión natural.
      */
     public function execute_chart_view( string $view_key, int $limit = 20, string $order_dir = 'DESC' ): array {
         global $wpdb;
@@ -805,17 +980,29 @@ class SGR_Suite_Database {
             return [];
         }
 
-        $view = $views[ $view_key ];
-        $sql  = $view['sql'];
+        $view    = $views[ $view_key ];
+        $sql     = $view['sql'];
+        $columns = $view['columns'] ?? [];
 
         $order_dir = strtoupper( $order_dir ) === 'ASC' ? 'ASC' : 'DESC';
 
-        // Solo agregar ORDER BY si la vista no lo tiene ya
+        // Sólo agregar ORDER BY si la vista no lo tiene ya.
         if ( stripos( $sql, 'ORDER BY' ) === false ) {
-            $sql .= " ORDER BY value {$order_dir}";
+            if ( in_array( 'x', $columns, true ) && in_array( 'y', $columns, true ) ) {
+                // Scatter: orden natural por x ascendente (o descendente si se pidió).
+                $sql .= " ORDER BY x {$order_dir}";
+            } elseif ( in_array( 'value', $columns, true ) ) {
+                $sql .= " ORDER BY value {$order_dir}";
+            }
         }
 
-        $limit = min( max( 1, $limit ), 500 );
+        // Vistas con muchos registros individuales (scatter / distribuciones)
+        // usan un tope más alto porque cada fila es un dato atómico.
+        $hard_cap = 500;
+        if ( in_array( $view_key, [ 'scatter_valor_avance', 'avance_por_entidad', 'matrix_municipio_dependencia' ], true ) ) {
+            $hard_cap = 1000;
+        }
+        $limit = min( max( 1, $limit ), $hard_cap );
         $sql  .= $wpdb->prepare( ' LIMIT %d', $limit );
 
         $results = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared

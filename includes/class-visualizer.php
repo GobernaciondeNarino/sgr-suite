@@ -166,6 +166,7 @@ class SGR_Suite_Visualizer {
             'pack'         => [ 'label' => esc_html__( 'Burbujas (Pack)', 'sgr-suite' ) ],
             'stacked_bar'  => [ 'label' => esc_html__( 'Barras Apiladas', 'sgr-suite' ) ],
             'grouped_bar'  => [ 'label' => esc_html__( 'Barras Agrupadas', 'sgr-suite' ) ],
+            'scatter'      => [ 'label' => esc_html__( 'Dispersión (Scatter)', 'sgr-suite' ) ],
         ];
     }
 

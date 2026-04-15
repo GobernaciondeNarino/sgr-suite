@@ -160,11 +160,14 @@
             var numFormat = config.number_format || 'colombiano';
             var selector = '#' + uid + '-container';
             var hasSeries = data.length > 0 && data[0].series !== undefined;
+            var hasXY = data.length > 0 && data[0].x !== undefined && data[0].y !== undefined;
 
             // Cast numeric values
             data.forEach(function (d) {
                 if (d.value !== undefined) d.value = parseFloat(d.value) || 0;
                 if (d.count !== undefined) d.count = parseInt(d.count) || 0;
+                if (d.x !== undefined) d.x = parseFloat(d.x) || 0;
+                if (d.y !== undefined) d.y = parseFloat(d.y) || 0;
             });
 
             try {
@@ -257,6 +260,38 @@
                             .select(selector).data(data)
                             .groupBy('label').sum('value')
                             .tooltipConfig(tooltipCfg)
+                            .shapeConfig({fill: colorFn});
+                        break;
+
+                    case 'scatter':
+                        // D3plus v2 usa Plot para scatter: necesita x/y numéricos.
+                        // Si la vista no trae columnas x/y, degradamos a barra.
+                        if (!hasXY) {
+                            chart = new d3p.BarChart()
+                                .select(selector).data(data)
+                                .x('label').y('value')
+                                .groupBy(hasSeries ? 'series' : 'label')
+                                .tooltipConfig(tooltipCfg)
+                                .shapeConfig({fill: colorFn});
+                            break;
+                        }
+                        chart = new d3p.Plot()
+                            .select(selector).data(data)
+                            .x('x').y('y')
+                            .groupBy(hasSeries ? 'series' : 'label')
+                            .size(function (d) {
+                                var v = (d && d.value !== undefined) ? parseFloat(d.value) : 0;
+                                return v > 0 ? Math.sqrt(v) : 6;
+                            })
+                            .tooltipConfig({
+                                title: function (d) { return d && d.label ? String(d.label) : ''; },
+                                body: function (d) {
+                                    if (!d) return '';
+                                    var xv = formatNumber(d.x, numFormat);
+                                    var yv = (d.y != null ? parseFloat(d.y).toFixed(2) : '0') + '%';
+                                    return 'Valor: ' + xv + '<br/>Avance: ' + yv;
+                                }
+                            })
                             .shapeConfig({fill: colorFn});
                         break;
 

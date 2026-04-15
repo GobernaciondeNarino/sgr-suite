@@ -72,5 +72,19 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.1.2: hardening de seguridad y correcciones de módulos.' );
         }
+
+        // v2.2.0: Nuevas vistas de datos derivadas del roadmap sgr_views.md.
+        //  - V-04 vigencia_valor, V-05 vigencia_dependencia_x, V-05b por proyectos.
+        //  - V-07b avance físico promedio por dependencia.
+        //  - V-08 scatter_valor_avance (+ V-08b distribucion_riesgo_contratos).
+        //  - V-14 matrix_municipio_dependencia.
+        //  - V-15 ranking_dependencias_vigencia.
+        //  - V-19 avance_por_entidad (distribución por entidad).
+        //  - Nuevo tipo de gráfico "scatter" (D3plus Plot).
+        // Las vistas antiguas siguen funcionando; sólo se limpia la cache.
+        if ( version_compare( $from_version, '2.2.0', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.2.0: nuevas vistas (V-04, V-05, V-08, V-14, V-15, V-19) y scatter chart.' );
+        }
     }
 }
