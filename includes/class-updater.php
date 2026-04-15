@@ -60,5 +60,17 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.0.0: FK robustas, chart views, card customizer.' );
         }
+
+        // v2.1.2: Revisión de módulos y endurecimiento de seguridad.
+        //  - Se corrigen rutas REST (colisión /proyectos/csv ↔ /proyectos/{bpin}).
+        //  - CSV export en streaming para evitar OOM.
+        //  - TRUNCATE -> DELETE para compatibilidad con FKs.
+        //  - Importación asíncrona arreglada (hook registrado en el bootstrap).
+        //  - Sanitización reforzada del card customizer.
+        //  - Corrección XSS en galería de imágenes del modal frontend.
+        if ( version_compare( $from_version, '2.1.2', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.1.2: hardening de seguridad y correcciones de módulos.' );
+        }
     }
 }

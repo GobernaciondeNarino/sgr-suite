@@ -254,7 +254,10 @@ class SGR_Suite_Importer {
             wp_send_json_error( [ 'message' => 'Sin permisos.' ], 403 );
         }
 
-        // Ejecutar importación en background usando wp_schedule_single_event
+        // Ejecutar importación en background usando wp_schedule_single_event.
+        // La acción 'sgr_suite_run_import_now' se registra en sgr-suite.php
+        // durante register_hooks(), garantizando que exista cuando WP-Cron
+        // la dispare en la siguiente solicitud.
         $this->set_progress( [
             'status'  => 'running',
             'total'   => 0,
@@ -262,19 +265,22 @@ class SGR_Suite_Importer {
             'message' => 'Iniciando importación...',
         ] );
 
-        // Disparar importación asíncrona
-        wp_schedule_single_event( time(), 'sgr_suite_run_import_now' );
-        add_action( 'sgr_suite_run_import_now', [ $this, 'run_import' ] );
-
-        // Para entornos sin cron real, ejecutar directamente
+        // Para entornos sin WP-Cron real, ejecutar directamente en esta petición.
         if ( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON ) {
             $result = $this->run_import();
             wp_send_json_success( $result );
             return;
         }
 
-        // Spawn cron para ejecución inmediata
-        spawn_cron();
+        // Encolar el evento asíncrono.
+        if ( ! wp_next_scheduled( 'sgr_suite_run_import_now' ) ) {
+            wp_schedule_single_event( time(), 'sgr_suite_run_import_now' );
+        }
+
+        // Disparar WP-Cron en segundo plano.
+        if ( function_exists( 'spawn_cron' ) ) {
+            spawn_cron();
+        }
 
         wp_send_json_success( [ 'message' => 'Importación iniciada.' ] );
     }

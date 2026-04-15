@@ -203,7 +203,7 @@ class SGR_Suite_Visualizer {
      * AJAX: Obtener datos del gráfico (público).
      */
     public function ajax_get_chart_data(): void {
-        $chart_id = absint( $_POST['chart_id'] ?? 0 );
+        $chart_id = isset( $_POST['chart_id'] ) ? absint( wp_unslash( $_POST['chart_id'] ) ) : 0;
         if ( ! $chart_id ) {
             wp_send_json_error( [ 'message' => 'ID requerido.' ] );
         }
@@ -258,8 +258,14 @@ class SGR_Suite_Visualizer {
         }
 
         $view_key  = sanitize_text_field( wp_unslash( $_POST['data_view'] ?? 'valor_por_dependencia' ) );
-        $limit     = min( absint( $_POST['limit'] ?? 20 ), 500 );
+        $limit     = min( absint( wp_unslash( $_POST['limit'] ?? 20 ) ), 500 );
         $order_dir = sanitize_text_field( wp_unslash( $_POST['order_dir'] ?? 'DESC' ) );
+
+        // Validar que la vista exista contra la whitelist de vistas predefinidas.
+        $views = $this->database->get_chart_views();
+        if ( ! isset( $views[ $view_key ] ) ) {
+            wp_send_json_error( [ 'message' => 'Vista inválida.' ], 400 );
+        }
 
         $data = $this->database->execute_chart_view( $view_key, $limit, $order_dir );
 
@@ -291,7 +297,8 @@ class SGR_Suite_Visualizer {
 
         $nonce       = wp_create_nonce( 'sgr_chart_' . $chart_id );
         $uid         = 'sgr-chart-' . $chart_id . '-' . wp_rand( 1000, 9999 );
-        $extra_class = ! empty( $atts['class'] ) ? ' ' . esc_attr( $atts['class'] ) : '';
+        // El escape final ocurre en el template; aquí sólo se normaliza.
+        $extra_class = ! empty( $atts['class'] ) ? sanitize_html_class( $atts['class'] ) : '';
 
         ob_start();
         include SGR_SUITE_PATH . 'templates/frontend/chart.php';

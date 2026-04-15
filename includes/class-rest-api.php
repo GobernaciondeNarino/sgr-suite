@@ -26,6 +26,10 @@ class SGR_Suite_Rest_API {
 
     /**
      * Registrar rutas REST.
+     *
+     * Importante: las rutas estáticas como /proyectos/csv deben registrarse
+     * ANTES de la ruta dinámica /proyectos/(?P<bpin>) para evitar que el
+     * patrón del BPIN capture el literal "csv".
      */
     public function register_routes(): void {
         register_rest_route( self::NAMESPACE, '/proyectos', [
@@ -35,7 +39,20 @@ class SGR_Suite_Rest_API {
             'args'                => $this->get_proyectos_args(),
         ] );
 
-        register_rest_route( self::NAMESPACE, '/proyectos/(?P<bpin>[a-zA-Z0-9_-]+)', [
+        register_rest_route( self::NAMESPACE, '/proyectos/csv', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'export_csv' ],
+            'permission_callback' => '__return_true',
+        ] );
+
+        register_rest_route( self::NAMESPACE, '/stats', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ $this, 'get_stats' ],
+            'permission_callback' => '__return_true',
+        ] );
+
+        // La ruta dinámica va al final y excluye explícitamente el literal "csv".
+        register_rest_route( self::NAMESPACE, '/proyectos/(?P<bpin>(?!csv$)[a-zA-Z0-9_-]+)', [
             'methods'             => \WP_REST_Server::READABLE,
             'callback'            => [ $this, 'get_proyecto' ],
             'permission_callback' => '__return_true',
@@ -46,18 +63,6 @@ class SGR_Suite_Rest_API {
                     'sanitize_callback' => 'sanitize_text_field',
                 ],
             ],
-        ] );
-
-        register_rest_route( self::NAMESPACE, '/stats', [
-            'methods'             => \WP_REST_Server::READABLE,
-            'callback'            => [ $this, 'get_stats' ],
-            'permission_callback' => '__return_true',
-        ] );
-
-        register_rest_route( self::NAMESPACE, '/proyectos/csv', [
-            'methods'             => \WP_REST_Server::READABLE,
-            'callback'            => [ $this, 'export_csv' ],
-            'permission_callback' => '__return_true',
         ] );
     }
 
@@ -179,32 +184,63 @@ class SGR_Suite_Rest_API {
 
     /**
      * GET /proyectos/csv
+     *
+     * Se emite directamente como text/csv sin pasar por el serializador JSON
+     * de WP_REST_Response. Se procesa en bloques para evitar problemas de memoria
+     * en instalaciones con miles de proyectos.
      */
-    public function export_csv( \WP_REST_Request $request ): \WP_REST_Response {
-        $proyectos = $this->database->get_proyectos();
-
-        $csv = "\xEF\xBB\xBF"; // BOM UTF-8 para Excel
-        $csv .= "BPIN,Nombre,Valor,Dependencia,Entidad Ejecutora,Contratos,Metas\n";
-
-        foreach ( $proyectos as $p ) {
-            $csv .= sprintf(
-                '"%s","%s",%s,"%s","%s",%d,%d' . "\n",
-                str_replace( '"', '""', $p['numero_proyecto'] ),
-                str_replace( '"', '""', $p['nombre_proyecto'] ),
-                $p['valor_proyecto'],
-                str_replace( '"', '""', $p['dependencia_proyecto'] ),
-                str_replace( '"', '""', $p['entidad_ejecutora_proyecto'] ),
-                $p['total_contratos'],
-                count( $p['metas'] ?? [] )
-            );
+    public function export_csv( \WP_REST_Request $request ) {
+        // Prevenir que WP serialice la respuesta como JSON.
+        if ( ! headers_sent() ) {
+            nocache_headers();
+            header( 'Content-Type: text/csv; charset=UTF-8' );
+            header( 'Content-Disposition: attachment; filename="sgr-proyectos-' . gmdate( 'Y-m-d' ) . '.csv"' );
+            header( 'X-Content-Type-Options: nosniff' );
+            header( 'X-Frame-Options: DENY' );
+            header( 'X-Robots-Tag: noindex' );
         }
 
-        $response = new \WP_REST_Response( $csv );
-        $response->header( 'Content-Type', 'text/csv; charset=UTF-8' );
-        $response->header( 'Content-Disposition', 'attachment; filename="sgr-proyectos-' . gmdate( 'Y-m-d' ) . '.csv"' );
-        $this->add_security_headers( $response );
+        // BOM UTF-8 para Excel.
+        echo "\xEF\xBB\xBF";
+        echo "BPIN,Nombre,Valor,Dependencia,Entidad Ejecutora,Contratos,Metas\n";
 
-        return $response;
+        // Procesar en bloques para no cargar todo en memoria.
+        $per_chunk = 500;
+        $max_rows  = 50000; // Tope de seguridad.
+        $offset    = 0;
+        $emitted   = 0;
+
+        do {
+            $chunk = $this->database->get_proyectos( [
+                'limite' => $per_chunk,
+                'offset' => $offset,
+            ] );
+
+            if ( empty( $chunk ) ) {
+                break;
+            }
+
+            foreach ( $chunk as $p ) {
+                if ( $emitted >= $max_rows ) {
+                    break 2;
+                }
+                echo sprintf(
+                    '"%s","%s",%s,"%s","%s",%d,%d' . "\n",
+                    str_replace( '"', '""', (string) ( $p['numero_proyecto'] ?? '' ) ),
+                    str_replace( '"', '""', (string) ( $p['nombre_proyecto'] ?? '' ) ),
+                    (float) ( $p['valor_proyecto'] ?? 0 ),
+                    str_replace( '"', '""', (string) ( $p['dependencia_proyecto'] ?? '' ) ),
+                    str_replace( '"', '""', (string) ( $p['entidad_ejecutora_proyecto'] ?? '' ) ),
+                    (int) ( $p['total_contratos'] ?? 0 ),
+                    count( $p['metas'] ?? [] )
+                );
+                $emitted++;
+            }
+
+            $offset += $per_chunk;
+        } while ( count( $chunk ) === $per_chunk );
+
+        exit;
     }
 
     /**

@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 $height = absint( $config['chart_height'] ?? 400 );
 ?>
 
-<div class="sgr-chart-wrapper<?php echo esc_attr( $extra_class ); ?>" id="<?php echo esc_attr( $uid ); ?>">
+<div class="sgr-chart-wrapper<?php echo ! empty( $extra_class ) ? ' ' . esc_attr( trim( (string) $extra_class ) ) : ''; ?>" id="<?php echo esc_attr( $uid ); ?>">
 
     <?php if ( ! empty( $config['show_toolbar'] ) ) : ?>
     <div class="sgr-chart-toolbar">

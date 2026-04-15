@@ -197,15 +197,24 @@ class SGR_Suite_Database {
 
     /**
      * Vaciar todas las tablas.
+     *
+     * Se usa DELETE FROM en vez de TRUNCATE porque TRUNCATE falla en tablas
+     * InnoDB que son referenciadas por claves foráneas, incluso con
+     * FOREIGN_KEY_CHECKS = 0.
      */
     public function truncate_tables(): void {
         global $wpdb;
 
         $wpdb->query( 'SET FOREIGN_KEY_CHECKS = 0' );
+
+        // Orden inverso al de creación (hijas primero) para respetar la cadena FK.
         $tables = [ 'imagenes', 'municipios', 'metas', 'contratos', 'proyectos' ];
         foreach ( $tables as $t ) {
-            $wpdb->query( "TRUNCATE TABLE {$this->table( $t )}" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            $table = $this->table( $t );
+            $wpdb->query( "DELETE FROM {$table}" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+            $wpdb->query( "ALTER TABLE {$table} AUTO_INCREMENT = 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         }
+
         $wpdb->query( 'SET FOREIGN_KEY_CHECKS = 1' );
 
         $this->logger->info( 'Todas las tablas del SGR fueron vaciadas.' );
@@ -423,25 +432,15 @@ class SGR_Suite_Database {
         $where_sql = ! empty( $where ) ? 'WHERE ' . implode( ' AND ', $where ) : '';
 
         $allowed_orderby = [ 'nombre_proyecto', 'numero_proyecto', 'valor_proyecto', 'total_contratos', 'fecha_importacion' ];
-        $orderby = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'nombre_proyecto';
-        $order   = strtoupper( $args['order'] ) === 'DESC' ? 'DESC' : 'ASC';
+        $orderby         = in_array( $args['orderby'], $allowed_orderby, true ) ? $args['orderby'] : 'nombre_proyecto';
+        $order           = strtoupper( $args['order'] ) === 'DESC' ? 'DESC' : 'ASC';
 
-        $limit_sql = '';
-        if ( $args['limite'] > 0 ) {
-            $where[]   = '1=1'; // placeholder for prepare
-            $limit_sql = 'LIMIT %d OFFSET %d';
+        $query = "SELECT p.* FROM {$this->table('proyectos')} p {$where_sql} ORDER BY p.{$orderby} {$order}";
+
+        if ( (int) $args['limite'] > 0 ) {
+            $query    .= ' LIMIT %d OFFSET %d';
             $prepare[] = absint( $args['limite'] );
             $prepare[] = absint( $args['offset'] );
-            // Remove the placeholder
-            array_pop( $where );
-        }
-
-        // Rebuild where_sql after limit adjustments
-        $where_sql = ! empty( $where ) ? 'WHERE ' . implode( ' AND ', $where ) : '';
-
-        $query = "SELECT p.* FROM {$this->table('proyectos')} p {$where_sql} ORDER BY {$orderby} {$order}";
-        if ( ! empty( $limit_sql ) ) {
-            $query .= " {$limit_sql}";
         }
 
         if ( ! empty( $prepare ) ) {
