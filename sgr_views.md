@@ -653,8 +653,8 @@ new d3plus.Sankey()
 **Descripción:** Vista optimizada para Geomap: identificador DIVIPOLA, nombre del municipio, y métricas de inversión y cobertura poblacional.
 
 **Gráficos compatibles:** `Geomap`
-
-> Requiere topojson de Nariño. Usar: `https://gobiernoabierto.narino.gov.co/wp-content/uploads/narino-municipios.topojson`
+> Crea el archivo .topogson con la informacion de https://gobiernoabierto.narino.gov.co/wp-content/uploads/2025/06/narino_municipios.geojson normaliza los nombres de los municipios para que coincidan los datos.
+> Requiere topojson de Nariño. Usar: `/municipios.topojson`. 
 
 ```json
 [
