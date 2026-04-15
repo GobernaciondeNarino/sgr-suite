@@ -6,7 +6,7 @@
 > https://d3plus.org/?path=/docs/core-charts-barchart--d3plus
 > https://d3plus.org/?path=/docs/core-charts-bumpchart--d3plus
 > https://d3plus.org/?path=/docs/core-charts-donut--d3plus
-> https://d3plus.org/?path=/docs/core-charts-geomap--d3plus | https://gobiernoabierto.narino.gov.co/wp-content/uploads/2025/06/narino_municipios.geojson
+> https://d3plus.org/?path=/docs/core-charts-geomap--d3plus | https://github.com/GobernaciondeNarino/sgr-suite/blob/claude/sgr-wordpress-plugin-pRvMm/municipios.geojson
 > https://d3plus.org/?path=/docs/core-charts-lineplot--d3plus
 > https://d3plus.org/?path=/docs/core-charts-matrix--d3plus
 > https://d3plus.org/?path=/docs/core-charts-network--d3plus
@@ -653,7 +653,7 @@ new d3plus.Sankey()
 **Descripción:** Vista optimizada para Geomap: identificador DIVIPOLA, nombre del municipio, y métricas de inversión y cobertura poblacional.
 
 **Gráficos compatibles:** `Geomap`
-> Crea el archivo .topogson con la informacion de https://gobiernoabierto.narino.gov.co/wp-content/uploads/2025/06/narino_municipios.geojson normaliza los nombres de los municipios para que coincidan los datos.
+> Crea el archivo .topogson con la informacion de (https://github.com/GobernaciondeNarino/sgr-suite/blob/claude/sgr-wordpress-plugin-pRvMm/municipios.geojson) normaliza los nombres de los municipios para que coincidan los datos.
 > Requiere topojson de Nariño. Usar: `/municipios.topojson`. 
 
 ```json
