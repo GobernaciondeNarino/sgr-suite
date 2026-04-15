@@ -117,5 +117,23 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.3.1: fix del join topojson↔data en el geomap.' );
         }
+
+        // v2.4.0: Mejoras visuales (ejes, leyenda con iconos, preview admin).
+        //  - Nuevos campos en config: legend_mode (auto|icons|hidden),
+        //    x_labels_rotate, x_labels_size, x_labels_visible.
+        //  - Catálogo de iconos SVG + matcher para series comunes del SGR
+        //    (IDSN→salud, PDA→agua, Infraestructura→carretera,
+        //     Regalías→monedas, Municipio→edificio, Departamento→estrella,
+        //     vigencia→calendario, riesgo alto/medio/bajo, meta, contrato).
+        //  - frontend-charts.js expone window.SGRChart.render() para que
+        //    el admin pueda dibujar un chart real en la vista previa.
+        //  - admin-charts.js refresca la vista previa en tiempo real
+        //    (debounced) al cambiar cualquier parámetro.
+        //  - La meta-box "Vista Previa" se mueve a la columna principal
+        //    para tener ancho suficiente.
+        if ( version_compare( $from_version, '2.4.0', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.4.0: ejes configurables, leyenda con iconos, vista previa en admin.' );
+        }
     }
 }

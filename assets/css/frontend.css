@@ -602,6 +602,72 @@
     padding: 30px;
 }
 
+/* ==========================================================================
+   Leyenda personalizada con iconos (v2.4.0)
+   ========================================================================== */
+
+.sgr-chart-icon-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    justify-content: center;
+    align-items: center;
+    padding: 14px 18px 16px;
+    background: #ffffff;
+    border-top: 1px solid #e5e7eb;
+}
+
+.sgr-chart-icon-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px 4px 4px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    line-height: 1.2;
+    white-space: nowrap;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.sgr-chart-icon-legend-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.sgr-chart-icon-legend-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+.sgr-chart-icon-legend-icon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+.sgr-chart-icon-legend-label {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Las etiquetas del eje X (svg text) heredan el tamaño/rotación que
+   aplique d3plus vía labelConfig; aquí sólo aseguramos legibilidad. */
+.sgr-chart-container svg .d3plus-Axis text,
+.sgr-chart-container svg .d3plus-Text text {
+    font-family: inherit;
+}
+
 /* Data Modal */
 .sgr-chart-data-modal {
     display: none;
