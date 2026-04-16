@@ -603,7 +603,7 @@
 }
 
 /* ==========================================================================
-   Leyenda personalizada con iconos (v2.4.0)
+   Leyenda personalizada — modos 'icons' y 'text' (v2.4.0 / v2.5.1)
    ========================================================================== */
 
 .sgr-chart-icon-legend {
@@ -621,19 +621,37 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 4px 10px 4px 4px;
+    line-height: 1.2;
+    white-space: nowrap;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+/* Modo "solo iconos": chips compactos sin padding ni borde,
+   sólo el cuadro coloreado con SVG. Título accesible vía tooltip. */
+.sgr-chart-icon-legend--icons .sgr-chart-icon-legend-item {
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    cursor: help;
+}
+
+.sgr-chart-icon-legend--icons .sgr-chart-icon-legend-item:hover {
+    transform: translateY(-2px);
+}
+
+/* Modo "solo texto": chip redondeado con un punto de color + label. */
+.sgr-chart-icon-legend--text .sgr-chart-icon-legend-item {
+    padding: 4px 12px 4px 10px;
     background: #f8fafc;
     border: 1px solid #e5e7eb;
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
     color: #334155;
-    line-height: 1.2;
-    white-space: nowrap;
-    transition: transform .15s ease, box-shadow .15s ease;
 }
 
-.sgr-chart-icon-legend-item:hover {
+.sgr-chart-icon-legend--text .sgr-chart-icon-legend-item:hover {
     transform: translateY(-1px);
     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
@@ -642,21 +660,30 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     border-radius: 6px;
     color: #ffffff;
     flex-shrink: 0;
 }
 
 .sgr-chart-icon-legend-icon svg {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     display: block;
 }
 
+.sgr-chart-icon-legend-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
 .sgr-chart-icon-legend-label {
-    max-width: 200px;
+    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
 }

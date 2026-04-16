@@ -157,6 +157,28 @@ class SGR_Suite_Updater {
             $this->normalize_legacy_chart_configs();
             $this->logger->info( 'Migración v2.5.0: matriz vista↔gráfico exhaustiva + data widget lateral.' );
         }
+
+        // v2.5.1: Fix del render y separación de modos de leyenda.
+        //  - applyXAxisConfig() pasaba `labels: boolean` y `ticks: undefined`
+        //    a chart.xConfig(), pero d3plus v2 Axis espera ARRAYS y
+        //    disparaba `.slice is not a function` dentro de chart.render().
+        //    Esto rompía bar, stacked_bar, grouped_bar, barH, line, area
+        //    y scatter para TODAS las vistas desde v2.4.0. Ahora sólo
+        //    pasamos shapeConfig.labelConfig (fontSize/rotate) y usamos
+        //    tickFormat=()=>'' para ocultar etiquetas cuando toca.
+        //  - Nuevo legend_mode 'text' (colored dot + label, sin icono).
+        //    El modo 'icons' ya no muestra texto junto al icono — sólo
+        //    el cuadro con SVG y el label como tooltip nativo.
+        //  - En el renderer se clona la data y se redondean value/x/y
+        //    antes de entregarla a d3plus (evita edge-cases numéricos
+        //    con valores COP del orden de 10^12). El widget lateral
+        //    conserva los valores crudos al no mutar el array original.
+        //  - Se fuerzan label/series a string para que d3plus nunca
+        //    reciba tipos inesperados en los campos categóricos.
+        if ( version_compare( $from_version, '2.5.1', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.5.1: fix crítico del render de charts (d3plus xConfig) + legend modes.' );
+        }
     }
 
     /**

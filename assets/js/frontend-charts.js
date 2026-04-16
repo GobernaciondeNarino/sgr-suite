@@ -62,36 +62,46 @@
         var rotate  = parseInt(config.x_labels_rotate || 0, 10) || 0;
         var size    = parseInt(config.x_labels_size || 12, 10) || 12;
 
+        // IMPORTANTE: d3plus v2 Axis espera `labels` y `ticks` como ARRAYS
+        // (no booleanos). Si pasamos `labels: true` o `ticks: undefined`
+        // el render() interno hace `this._labels.slice()` y truena con
+        // "slice is not a function". Por eso sólo pasamos shapeConfig.
+        var xConf = {
+            shapeConfig: {
+                labelConfig: {
+                    fontSize: size,
+                    rotate: rotate
+                }
+            }
+        };
+
+        // Para ocultar las etiquetas usamos tickFormat que devuelve '',
+        // que es compatible con cualquier versión del axis.
+        if (!visible) {
+            xConf.tickFormat = function () { return ''; };
+        }
+
         try {
-            chart.xConfig({
-                shapeConfig: {
-                    labelConfig: {
-                        fontSize: size,
-                        rotate: rotate
-                    }
-                },
-                labels: visible,
-                ticks: visible ? undefined : []
-            });
+            chart.xConfig(xConf);
         } catch (err) {
-            // Algunos sub-charts pueden no exponer el mismo schema.
             console.warn('SGR Chart: xConfig no aplicado:', err && err.message);
         }
 
         // barH invierte ejes: también aplicamos a yConfig para preservar
         // consistencia visual (las etiquetas textuales ahora están en Y).
         if (chartType === 'barH' && typeof chart.yConfig === 'function') {
-            try {
-                chart.yConfig({
-                    shapeConfig: {
-                        labelConfig: {
-                            fontSize: size,
-                            rotate: 0
-                        }
-                    },
-                    labels: visible
-                });
-            } catch (_) { /* ignore */ }
+            var yConf = {
+                shapeConfig: {
+                    labelConfig: {
+                        fontSize: size,
+                        rotate: 0
+                    }
+                }
+            };
+            if (!visible) {
+                yConf.tickFormat = function () { return ''; };
+            }
+            try { chart.yConfig(yConf); } catch (_) { /* ignore */ }
         }
     }
 
@@ -144,14 +154,19 @@
     }
 
     /**
-     * Dibujar una leyenda HTML con iconos debajo del wrapper del gráfico.
+     * Dibujar una leyenda HTML personalizada debajo del wrapper del gráfico.
      *
-     * Usa config.legend_icons si vienen pre-computados desde PHP,
-     * o los calcula sobre la marcha a partir de las filas únicas de data
-     * (campo series si existe, label si no).
+     * Modos soportados:
+     *   - 'icons' → sólo los cuadros con icono SVG (sin texto al lado).
+     *               El título se expone vía tooltip nativo del navegador.
+     *   - 'text'  → sólo chips con punto de color + label (sin icono SVG).
+     *
+     * Usa config.legend_icons si viene pre-computado desde PHP, o lo
+     * calcula sobre la marcha a partir de las filas únicas del dataset.
      */
-    function renderIconLegend(wrapperEl, data, config) {
+    function renderIconLegend(wrapperEl, data, config, mode) {
         if (!wrapperEl) return;
+        mode = mode === 'text' ? 'text' : 'icons';
 
         var items = Array.isArray(config.legend_icons) ? config.legend_icons.slice() : null;
         if (!items || !items.length) {
@@ -178,25 +193,36 @@
         if (!items.length) return;
 
         var legend = document.createElement('div');
-        legend.className = 'sgr-chart-icon-legend';
+        legend.className = 'sgr-chart-icon-legend sgr-chart-icon-legend--' + mode;
 
         items.forEach(function (item) {
             var chip = document.createElement('div');
             chip.className = 'sgr-chart-icon-legend-item';
+            // El título (tooltip nativo) siempre expone el nombre aunque
+            // el modo 'icons' no lo muestre en pantalla.
             chip.setAttribute('title', item.label);
 
-            var iconBox = document.createElement('span');
-            iconBox.className = 'sgr-chart-icon-legend-icon';
-            iconBox.style.backgroundColor = item.color || '#94a3b8';
-            iconBox.style.color = '#ffffff';
-            iconBox.innerHTML = item.svg || '';
+            if (mode === 'icons') {
+                // Sólo cuadro con icono, sin label textual al lado.
+                var iconBox = document.createElement('span');
+                iconBox.className = 'sgr-chart-icon-legend-icon';
+                iconBox.style.backgroundColor = item.color || '#94a3b8';
+                iconBox.style.color = '#ffffff';
+                iconBox.innerHTML = item.svg || '';
+                chip.appendChild(iconBox);
+            } else {
+                // Modo 'text': punto de color + label, sin icono SVG.
+                var dot = document.createElement('span');
+                dot.className = 'sgr-chart-icon-legend-dot';
+                dot.style.backgroundColor = item.color || '#94a3b8';
+                chip.appendChild(dot);
 
-            var labelBox = document.createElement('span');
-            labelBox.className = 'sgr-chart-icon-legend-label';
-            labelBox.textContent = item.label;
+                var labelBox = document.createElement('span');
+                labelBox.className = 'sgr-chart-icon-legend-label';
+                labelBox.textContent = item.label;
+                chip.appendChild(labelBox);
+            }
 
-            chip.appendChild(iconBox);
-            chip.appendChild(labelBox);
             legend.appendChild(chip);
         });
 
@@ -356,12 +382,49 @@
             var hasSeries = data.length > 0 && data[0].series !== undefined;
             var hasXY = data.length > 0 && data[0].x !== undefined && data[0].y !== undefined;
 
-            // Cast numeric values
-            data.forEach(function (d) {
-                if (d.value !== undefined) d.value = parseFloat(d.value) || 0;
-                if (d.count !== undefined) d.count = parseInt(d.count) || 0;
-                if (d.x !== undefined) d.x = parseFloat(d.x) || 0;
-                if (d.y !== undefined) d.y = parseFloat(d.y) || 0;
+            // Normalizar los valores numéricos antes de entregar el
+            // array a d3plus. wpdb los devuelve como strings (p.ej.
+            // "4791599566189.55"); parseFloat + Math.round elimina la
+            // cola de decimales que dispara edge-cases numéricos en el
+            // axis (BarChart/StackedArea con valores COP ~10^12).
+            //
+            // Se clona cada fila para no mutar el array original — el
+            // widget lateral de datos lo consume en paralelo y debe
+            // conservar los valores crudos.
+            data = data.map(function (row) {
+                var d = {};
+                for (var k in row) {
+                    if (Object.prototype.hasOwnProperty.call(row, k)) {
+                        d[k] = row[k];
+                    }
+                }
+                if (d.value !== undefined) {
+                    d.value = Math.round(parseFloat(d.value) || 0);
+                }
+                if (d.count !== undefined) {
+                    d.count = parseInt(d.count, 10) || 0;
+                }
+                if (d.x !== undefined) {
+                    var nx = parseFloat(d.x) || 0;
+                    d.x = Math.round(nx * 100) / 100;
+                }
+                if (d.y !== undefined) {
+                    var ny = parseFloat(d.y) || 0;
+                    d.y = Math.round(ny * 100) / 100;
+                }
+                if (d.valor_total !== undefined) {
+                    d.valor_total = Math.round(parseFloat(d.valor_total) || 0);
+                }
+                // Asegurar que label/series sean strings (nunca undefined
+                // ni numéricos) para evitar que d3plus llame .slice() o
+                // similar sobre un tipo inesperado.
+                if (d.label !== undefined && d.label !== null) {
+                    d.label = String(d.label);
+                }
+                if (d.series !== undefined && d.series !== null) {
+                    d.series = String(d.series);
+                }
+                return d;
             });
 
             // Asegurar que el contenedor tenga un id para que d3plus pueda
@@ -610,14 +673,13 @@
                             .shapeConfig({fill: colorFn});
                 }
 
-            // Ocultar la leyenda nativa de d3plus cuando:
-            //  - el usuario eligió "iconos" (le dibujamos una leyenda
-            //    propia debajo del gráfico), o
-            //  - el usuario eligió "oculta", o
-            //  - mantuvo el legacy show_legend === false.
+            // Ocultar la leyenda nativa de d3plus cuando el usuario
+            // eligió cualquiera de los modos personalizados (icons/text)
+            // o la ocultó totalmente. 'auto' = leyenda d3plus por defecto.
             var legendMode = config.legend_mode || 'auto';
             var hideNativeLegend =
                 legendMode === 'icons' ||
+                legendMode === 'text'  ||
                 legendMode === 'hidden' ||
                 config.show_legend === false;
             if (hideNativeLegend && chart.legend) {
@@ -631,11 +693,11 @@
 
             chart.render();
 
-            // Leyenda con iconos (HTML propio) — se construye después
-            // del render para insertarse en el wrapper. El admin puede
-            // sobre-escribir config.legend_icons en runtime.
-            if (legendMode === 'icons' && wrapperEl) {
-                renderIconLegend(wrapperEl, data, config);
+            // Leyenda HTML personalizada (iconos o texto) se construye
+            // después del render para insertarse en el wrapper. El admin
+            // puede sobre-escribir config.legend_icons en runtime.
+            if ((legendMode === 'icons' || legendMode === 'text') && wrapperEl) {
+                renderIconLegend(wrapperEl, data, config, legendMode);
             }
         },
 

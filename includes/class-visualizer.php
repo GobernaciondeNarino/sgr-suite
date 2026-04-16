@@ -177,7 +177,7 @@ class SGR_Suite_Visualizer {
             'number_format'     => in_array( $raw['number_format'] ?? 'colombiano', [ 'colombiano', 'millones', 'internacional', 'sin_formato' ], true ) ? $raw['number_format'] : 'colombiano',
             'colors'            => $this->sanitize_colors( $raw['colors'] ?? '' ),
             // Opciones visuales (v2.4.0+).
-            'legend_mode'       => in_array( $raw['legend_mode'] ?? 'auto', [ 'auto', 'icons', 'hidden' ], true ) ? $raw['legend_mode'] : 'auto',
+            'legend_mode'       => in_array( $raw['legend_mode'] ?? 'auto', [ 'auto', 'text', 'icons', 'hidden' ], true ) ? $raw['legend_mode'] : 'auto',
             'x_labels_rotate'   => max( 0, min( absint( $raw['x_labels_rotate'] ?? 0 ), 90 ) ),
             'x_labels_size'     => max( 8, min( absint( $raw['x_labels_size'] ?? 12 ), 24 ) ),
             'x_labels_visible'  => ! empty( $raw['x_labels_visible'] ),
@@ -785,7 +785,7 @@ class SGR_Suite_Visualizer {
         $number_format = in_array( $number_format, [ 'colombiano', 'millones', 'internacional', 'sin_formato' ], true ) ? $number_format : 'colombiano';
         $colors        = $this->sanitize_colors( sanitize_text_field( wp_unslash( $_POST['colors'] ?? '' ) ) );
         $legend_mode   = sanitize_text_field( wp_unslash( $_POST['legend_mode'] ?? 'auto' ) );
-        $legend_mode   = in_array( $legend_mode, [ 'auto', 'icons', 'hidden' ], true ) ? $legend_mode : 'auto';
+        $legend_mode   = in_array( $legend_mode, [ 'auto', 'text', 'icons', 'hidden' ], true ) ? $legend_mode : 'auto';
         $x_rotate      = max( 0, min( absint( wp_unslash( $_POST['x_labels_rotate'] ?? 0 ) ), 90 ) );
         $x_size        = max( 8, min( absint( wp_unslash( $_POST['x_labels_size'] ?? 12 ) ), 24 ) );
         $x_visible     = ! empty( $_POST['x_labels_visible'] );
