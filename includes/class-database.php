@@ -586,11 +586,53 @@ class SGR_Suite_Database {
     // =========================================================================
 
     /**
+     * Expresión SQL canónica para la entidad ejecutora.
+     *
+     * El API SGR devuelve variantes como "Departamento de Nariño",
+     * "Municipio de Yacuanquer", "Fundación Universidad del Valle",
+     * "Contratista SPD-SGR" que conviven con las tres canónicas. Aquí
+     * se consolidan a los tres buckets conceptuales: Departamento,
+     * Municipio y Otro.
+     *
+     * @param string $alias Alias SQL del campo (p. ej. 'p.entidad_ejecutora_proyecto').
+     */
+    private function entidad_expr( string $alias = 'p.entidad_ejecutora_proyecto' ): string {
+        return "(CASE
+            WHEN {$alias} IS NULL OR {$alias} = '' THEN 'Otro'
+            WHEN {$alias} LIKE '%epartamento%' THEN 'Departamento'
+            WHEN {$alias} LIKE '%unicipio%' THEN 'Municipio'
+            ELSE 'Otro'
+        END)";
+    }
+
+    /**
+     * Expresión SQL que deriva la vigencia de un proyecto a partir del
+     * prefijo del BPIN. Sólo considera años reales 19xx/20xx (el regex
+     * ^[0-9]{4} anterior matchaba erróneamente los BPINs SGR "5200..."
+     * como vigencia "5200"). Los proyectos sin año-prefijo caen a un
+     * bucket "{dependencia}*" para mantener la serie interpretable.
+     */
+    private function vigencia_expr( string $alias = 'p.numero_proyecto', string $dep_alias = 'p.dependencia_proyecto' ): string {
+        return "(CASE
+            WHEN {$alias} REGEXP '^(20|19)[0-9]{2}' THEN SUBSTRING({$alias}, 1, 4)
+            WHEN {$dep_alias} = 'IDSN' THEN 'IDSN*'
+            WHEN {$dep_alias} = 'Infraestructura' THEN 'Infra*'
+            WHEN {$dep_alias} = 'PDA' THEN 'PDA*'
+            WHEN {$dep_alias} = 'Regalías' THEN 'Regalías*'
+            ELSE 'Otros*'
+        END)";
+    }
+
+    /**
      * Vistas predefinidas para gráficos con JOINs entre tablas.
      *
      * @return array<string, array{label: string, sql: string, columns: string[]}>
      */
     public function get_chart_views(): array {
+        // Expresiones reutilizables (v2.5.2+).
+        $entidad_norm  = $this->entidad_expr();
+        $vigencia_norm = $this->vigencia_expr();
+
         return [
             // =====================================================================
             // VISTAS SIMPLES (label + value)
@@ -598,11 +640,14 @@ class SGR_Suite_Database {
 
             'valor_por_dependencia' => [
                 'label'   => 'Inversión por Dependencia (IDSN, Regalías, PDA, Infraestructura)',
-                'sql'     => "SELECT dependencia_proyecto AS label, SUM(valor_proyecto) AS value, COUNT(*) AS count
+                'sql'     => "SELECT dependencia_proyecto AS label,
+                                     SUM(valor_proyecto) AS value,
+                                     COUNT(*) AS count,
+                                     ROUND(AVG(valor_proyecto), 2) AS valor_promedio
                               FROM {$this->table('proyectos')}
                               WHERE dependencia_proyecto != ''
                               GROUP BY dependencia_proyecto",
-                'columns' => [ 'label', 'value', 'count' ],
+                'columns' => [ 'label', 'value', 'count', 'valor_promedio' ],
             ],
             'proyectos_por_dependencia' => [
                 'label'   => 'Cantidad de Proyectos por Dependencia',
@@ -614,18 +659,19 @@ class SGR_Suite_Database {
             ],
             'valor_por_entidad' => [
                 'label'   => 'Inversión por Entidad Ejecutora (Departamento, Municipio, Otro)',
-                'sql'     => "SELECT entidad_ejecutora_proyecto AS label, SUM(valor_proyecto) AS value, COUNT(*) AS count
-                              FROM {$this->table('proyectos')}
-                              WHERE entidad_ejecutora_proyecto != ''
-                              GROUP BY entidad_ejecutora_proyecto",
-                'columns' => [ 'label', 'value', 'count' ],
+                'sql'     => "SELECT {$entidad_norm} AS label,
+                                     SUM(valor_proyecto) AS value,
+                                     COUNT(*) AS count,
+                                     ROUND(AVG(valor_proyecto), 2) AS valor_promedio
+                              FROM {$this->table('proyectos')} p
+                              GROUP BY {$entidad_norm}",
+                'columns' => [ 'label', 'value', 'count', 'valor_promedio' ],
             ],
             'proyectos_por_entidad' => [
                 'label'   => 'Cantidad de Proyectos por Entidad Ejecutora',
-                'sql'     => "SELECT entidad_ejecutora_proyecto AS label, COUNT(*) AS value
-                              FROM {$this->table('proyectos')}
-                              WHERE entidad_ejecutora_proyecto != ''
-                              GROUP BY entidad_ejecutora_proyecto",
+                'sql'     => "SELECT {$entidad_norm} AS label, COUNT(*) AS value
+                              FROM {$this->table('proyectos')} p
+                              GROUP BY {$entidad_norm}",
                 'columns' => [ 'label', 'value' ],
             ],
             'top_proyectos_valor' => [
@@ -719,21 +765,22 @@ class SGR_Suite_Database {
             'valor_dependencia_x_entidad' => [
                 'label'   => 'Inversión: Dependencia x Entidad Ejecutora (Apiladas)',
                 'sql'     => "SELECT p.dependencia_proyecto AS label,
-                                     p.entidad_ejecutora_proyecto AS series,
-                                     SUM(p.valor_proyecto) AS value
+                                     {$entidad_norm} AS series,
+                                     SUM(p.valor_proyecto) AS value,
+                                     COUNT(*) AS count
                               FROM {$this->table('proyectos')} p
-                              WHERE p.dependencia_proyecto != '' AND p.entidad_ejecutora_proyecto != ''
-                              GROUP BY p.dependencia_proyecto, p.entidad_ejecutora_proyecto",
-                'columns' => [ 'label', 'series', 'value' ],
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY p.dependencia_proyecto, {$entidad_norm}",
+                'columns' => [ 'label', 'series', 'value', 'count' ],
             ],
             'proyectos_dependencia_x_entidad' => [
                 'label'   => 'Proyectos: Dependencia x Entidad Ejecutora (Agrupadas)',
                 'sql'     => "SELECT p.dependencia_proyecto AS label,
-                                     p.entidad_ejecutora_proyecto AS series,
+                                     {$entidad_norm} AS series,
                                      COUNT(*) AS value
                               FROM {$this->table('proyectos')} p
-                              WHERE p.dependencia_proyecto != '' AND p.entidad_ejecutora_proyecto != ''
-                              GROUP BY p.dependencia_proyecto, p.entidad_ejecutora_proyecto",
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY p.dependencia_proyecto, {$entidad_norm}",
                 'columns' => [ 'label', 'series', 'value' ],
             ],
             'proyectos_vs_contratos_x_dependencia' => [
@@ -783,13 +830,14 @@ class SGR_Suite_Database {
             ],
             'valor_entidad_x_dependencia' => [
                 'label'   => 'Inversión: Entidad x Dependencia (Apiladas)',
-                'sql'     => "SELECT p.entidad_ejecutora_proyecto AS label,
+                'sql'     => "SELECT {$entidad_norm} AS label,
                                      p.dependencia_proyecto AS series,
-                                     SUM(p.valor_proyecto) AS value
+                                     SUM(p.valor_proyecto) AS value,
+                                     COUNT(*) AS count
                               FROM {$this->table('proyectos')} p
-                              WHERE p.dependencia_proyecto != '' AND p.entidad_ejecutora_proyecto != ''
-                              GROUP BY p.entidad_ejecutora_proyecto, p.dependencia_proyecto",
-                'columns' => [ 'label', 'series', 'value' ],
+                              WHERE p.dependencia_proyecto != ''
+                              GROUP BY {$entidad_norm}, p.dependencia_proyecto",
+                'columns' => [ 'label', 'series', 'value', 'count' ],
             ],
 
             // =====================================================================
@@ -803,51 +851,35 @@ class SGR_Suite_Database {
             'vigencia_valor' => [
                 'label'   => 'V-04 · Inversión por Vigencia (BPIN año)',
                 'sql'     => "SELECT
-                                CASE
-                                    WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
-                                        THEN SUBSTRING(p.numero_proyecto, 1, 4)
-                                    WHEN p.dependencia_proyecto = 'IDSN' THEN 'IDSN*'
-                                    WHEN p.dependencia_proyecto = 'Infraestructura' THEN 'Infra*'
-                                    ELSE 'Otros*'
-                                END AS label,
+                                {$vigencia_norm} AS label,
                                 SUM(p.valor_proyecto) AS value,
-                                COUNT(*) AS count
+                                COUNT(*) AS count,
+                                ROUND(AVG(p.valor_proyecto), 2) AS valor_promedio
                               FROM {$this->table('proyectos')} p
                               GROUP BY label",
-                'columns' => [ 'label', 'value', 'count' ],
+                'columns' => [ 'label', 'value', 'count', 'valor_promedio' ],
             ],
 
             'vigencia_dependencia_x' => [
                 'label'   => 'V-05 · Inversión: Vigencia x Dependencia (Apiladas)',
-                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
+                'sql'     => "SELECT sub.label, sub.series, sub.value, sub.count FROM (
                                 SELECT
-                                    CASE
-                                        WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
-                                            THEN SUBSTRING(p.numero_proyecto, 1, 4)
-                                        WHEN p.dependencia_proyecto = 'IDSN' THEN 'IDSN*'
-                                        WHEN p.dependencia_proyecto = 'Infraestructura' THEN 'Infra*'
-                                        ELSE 'Otros*'
-                                    END AS label,
+                                    {$vigencia_norm} AS label,
                                     p.dependencia_proyecto AS series,
-                                    SUM(p.valor_proyecto) AS value
+                                    SUM(p.valor_proyecto) AS value,
+                                    COUNT(*) AS count
                                 FROM {$this->table('proyectos')} p
                                 WHERE p.dependencia_proyecto != ''
                                 GROUP BY label, p.dependencia_proyecto
                               ) sub",
-                'columns' => [ 'label', 'series', 'value' ],
+                'columns' => [ 'label', 'series', 'value', 'count' ],
             ],
 
             'proyectos_vigencia_x_dependencia' => [
                 'label'   => 'V-05b · Proyectos: Vigencia x Dependencia (Agrupadas)',
                 'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
                                 SELECT
-                                    CASE
-                                        WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
-                                            THEN SUBSTRING(p.numero_proyecto, 1, 4)
-                                        WHEN p.dependencia_proyecto = 'IDSN' THEN 'IDSN*'
-                                        WHEN p.dependencia_proyecto = 'Infraestructura' THEN 'Infra*'
-                                        ELSE 'Otros*'
-                                    END AS label,
+                                    {$vigencia_norm} AS label,
                                     p.dependencia_proyecto AS series,
                                     COUNT(*) AS value
                                 FROM {$this->table('proyectos')} p
@@ -880,15 +912,15 @@ class SGR_Suite_Database {
             'avance_por_entidad' => [
                 'label'   => 'V-19 · Avance Físico por Entidad Ejecutora (Distribución)',
                 'sql'     => "SELECT
-                                p.entidad_ejecutora_proyecto AS label,
-                                p.entidad_ejecutora_proyecto AS series,
+                                {$entidad_norm} AS label,
+                                {$entidad_norm} AS series,
                                 c.porcentaje_avance_fisico AS value,
-                                c.numero_contrato AS detalle
+                                c.numero_contrato AS detalle,
+                                c.valor_contrato AS total_valor
                               FROM {$this->table('contratos')} c
                               INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
-                              WHERE p.entidad_ejecutora_proyecto != ''
-                                AND c.porcentaje_avance_fisico IS NOT NULL",
-                'columns' => [ 'label', 'series', 'value', 'detalle' ],
+                              WHERE c.porcentaje_avance_fisico IS NOT NULL",
+                'columns' => [ 'label', 'series', 'value', 'detalle', 'total_valor' ],
             ],
 
             'avance_por_dependencia_promedio' => [
@@ -927,19 +959,17 @@ class SGR_Suite_Database {
 
             'ranking_dependencias_vigencia' => [
                 'label'   => 'V-15 · Ranking de Dependencias por Vigencia',
+                // Sólo vigencias reales (prefijo BPIN año) — los BPIN SGR
+                // que empiezan con 52xxx no se consideran vigencia.
                 'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
                                 SELECT
-                                    CASE
-                                        WHEN p.numero_proyecto REGEXP '^[0-9]{4}'
-                                            THEN SUBSTRING(p.numero_proyecto, 1, 4)
-                                        ELSE 'Sin vigencia'
-                                    END AS label,
+                                    SUBSTRING(p.numero_proyecto, 1, 4) AS label,
                                     p.dependencia_proyecto AS series,
                                     COUNT(*) AS value
                                 FROM {$this->table('proyectos')} p
                                 WHERE p.dependencia_proyecto != ''
-                                  AND p.numero_proyecto REGEXP '^[0-9]{4}'
-                                GROUP BY label, p.dependencia_proyecto
+                                  AND p.numero_proyecto REGEXP '^(20|19)[0-9]{2}'
+                                GROUP BY SUBSTRING(p.numero_proyecto, 1, 4), p.dependencia_proyecto
                               ) sub",
                 'columns' => [ 'label', 'series', 'value' ],
             ],

@@ -45,6 +45,105 @@
     }
 
     /**
+     * Construir un tooltip enriquecido y adaptable al esquema de los datos.
+     *
+     * Muestra como título el label (o "label → series" cuando aplica) y
+     * como cuerpo todas las métricas disponibles en la fila: valor
+     * principal, cantidad, valor promedio, valor total y participación
+     * porcentual (sólo para vistas sin series, donde la suma es
+     * comparable).
+     *
+     * Se sobrescribe después en los cases scatter/geomap que tienen sus
+     * propios tooltips específicos.
+     */
+    function buildTooltipConfig(chartType, data, config, numFormat) {
+        // Total absoluto de la serie principal para calcular %.
+        var total = 0;
+        var hasSeries = data.length && data[0].series !== undefined;
+        for (var i = 0; i < data.length; i++) {
+            var v = parseFloat(data[i].value);
+            if (!isNaN(v)) total += Math.abs(v);
+        }
+
+        // Etiqueta principal del valor según la intención de la vista.
+        // Para conteos (p. ej. proyectos_por_*) preferimos "Cantidad" y
+        // omitimos "Valor" para evitar redundancia. Lo detectamos por la
+        // ausencia de `count` (si la vista ya tiene count es que value es
+        // una métrica distinta).
+        var viewKey = (config && config.data_view) || '';
+        var isCount = /^(?:proyectos_por_|contratos_por_|metas_por_|top_proyectos_(?:contratos|metas)|ranking_|proyectos_vigencia|proyectos_dependencia|matrix_municipio|distribucion_|avance_fisico_por_contrato|avance_por_(?:dependencia_promedio|entidad))/.test(viewKey);
+        var valueLabel = isCount && !('valor_total' in (data[0] || {})) ? 'Cantidad' : 'Valor';
+
+        // Para avance: añadir % al valor principal.
+        var isAvance = /avance/.test(viewKey);
+        var formatValue = function (v) {
+            if (v == null || isNaN(v)) return '';
+            if (isAvance) return parseFloat(v).toFixed(2) + '%';
+            return formatNumber(v, numFormat);
+        };
+
+        return {
+            title: function (d) {
+                if (!d) return '';
+                var lbl = d.label != null ? String(d.label) : '';
+                var ser = d.series != null ? String(d.series) : '';
+                if (lbl && ser && ser !== lbl) {
+                    return lbl + ' → ' + ser;
+                }
+                return lbl || ser || '';
+            },
+            body: function (d) {
+                if (!d) return '';
+                var lines = [];
+                var val = parseFloat(d.value);
+
+                if (!isNaN(val)) {
+                    lines.push('<strong>' + valueLabel + ':</strong> ' + formatValue(val));
+                }
+
+                // Cantidad de registros asociados (count).
+                if (d.count != null) {
+                    var cnt = parseInt(d.count, 10);
+                    if (!isNaN(cnt)) {
+                        lines.push('<strong>Proyectos:</strong> ' + cnt.toLocaleString('es-CO'));
+                    }
+                }
+
+                // Valor promedio por grupo.
+                if (d.valor_promedio != null) {
+                    var avg = parseFloat(d.valor_promedio);
+                    if (!isNaN(avg) && avg > 0) {
+                        lines.push('<strong>Promedio:</strong> ' + formatNumber(avg, numFormat));
+                    }
+                }
+
+                // Valor total (cuando la métrica principal es conteo).
+                if (d.total_valor != null) {
+                    var tot = parseFloat(d.total_valor);
+                    if (!isNaN(tot) && tot > 0) {
+                        lines.push('<strong>Valor total:</strong> ' + formatNumber(tot, numFormat));
+                    }
+                }
+
+                // Número de contrato para distribuciones de avance.
+                if (d.detalle) {
+                    lines.push('<strong>Contrato:</strong> ' + String(d.detalle));
+                }
+
+                // Participación % (sólo para vistas sin series donde sumar
+                // tiene sentido — en stacked/grouped el 'total' suele
+                // mezclar categorías distintas).
+                if (!hasSeries && total > 0 && !isNaN(val) && !isAvance) {
+                    var pct = (Math.abs(val) / total * 100).toFixed(1);
+                    lines.push('<strong>Participación:</strong> ' + pct + '%');
+                }
+
+                return lines.join('<br/>');
+            }
+        };
+    }
+
+    /**
      * Aplicar la configuración de etiquetas del eje X sobre un chart d3plus.
      *
      * Sólo tiene sentido para charts con ejes (bar/barH/line/area/scatter y
@@ -436,7 +535,10 @@
             var selector = '#' + container.id;
 
             var chart;
-            var tooltipCfg = {body: function (d) { return formatNumber(d.value, numFormat); }};
+            // Tooltip enriquecido que muestra label + series + métricas
+            // disponibles. Los cases scatter y geomap lo sobrescriben con
+            // su propia configuración específica más abajo.
+            var tooltipCfg = buildTooltipConfig(chartType, data, config, numFormat);
 
             switch (chartType) {
 
@@ -481,7 +583,9 @@
                         chart = new d3p.LinePlot()
                             .select(selector).data(data)
                             .x('label').y('value')
-                            .groupBy(hasSeries ? 'series' : function () { return 'Valor'; });
+                            .groupBy(hasSeries ? 'series' : function () { return 'Valor'; })
+                            .tooltipConfig(tooltipCfg)
+                            .shapeConfig({stroke: colorFn, strokeWidth: 2});
                         break;
 
                     case 'area':
@@ -489,6 +593,7 @@
                             .select(selector).data(data)
                             .x('label').y('value')
                             .groupBy(hasSeries ? 'series' : function () { return 'Valor'; })
+                            .tooltipConfig(tooltipCfg)
                             .shapeConfig({fill: colorFn});
                         break;
 
@@ -604,9 +709,24 @@
                             .colorScale('value')
                             .colorScaleConfig({
                                 color: geomapPalette,
+                                // Formateador del eje del gradiente (los
+                                // números que aparecen debajo de la leyenda).
+                                // `axisConfig.tickFormat` es el punto correcto:
+                                // recibe un número real. `legendConfig.label`
+                                // recibía un shape-object y truncaba a 0.
+                                axisConfig: {
+                                    tickFormat: function (n) {
+                                        return formatNumber(n, numFormat);
+                                    }
+                                },
+                                // Las etiquetas de los rangos se las dejamos
+                                // a d3plus (auto-calcula bucket labels con
+                                // base a los cortes de la escala cuantil).
+                                // Ajustamos sólo el tamaño para que entren
+                                // bien en la franja inferior.
                                 legendConfig: {
-                                    label: function (d) {
-                                        return formatNumber(d, numFormat);
+                                    shapeConfig: {
+                                        labelConfig: { fontSize: 11 }
                                     }
                                 }
                             })
