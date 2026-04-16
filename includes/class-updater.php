@@ -179,6 +179,32 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.5.1: fix crítico del render de charts (d3plus xConfig) + legend modes.' );
         }
+
+        // v2.5.2: Auditoría de datos + tooltips ricos.
+        //  - SQL vigencia: el regex anterior `^[0-9]{4}` matchaba los
+        //    BPIN SGR "5200100107_0002" como vigencia "5200". Ahora sólo
+        //    se consideran años reales `^(20|19)[0-9]{2}`; los BPIN sin
+        //    año-prefijo caen al bucket `{dependencia}*`.
+        //  - Normalización de entidad ejecutora a nivel SQL: los valores
+        //    "Departamento de Nariño", "Municipio de X", "Fundación...",
+        //    "Contratista..." se consolidan a Departamento / Municipio /
+        //    Otro vía CASE (antes aparecían como categorías separadas).
+        //  - valor_por_dependencia, valor_por_entidad, vigencia_valor y
+        //    vigencia_dependencia_x añaden `valor_promedio` (AVG). Los
+        //    cruces con series añaden `count` para tooltips más ricos.
+        //  - Nuevo buildTooltipConfig() en el renderer: título adaptativo
+        //    ("label → series"), cuerpo con valor + cantidad + promedio
+        //    + valor total + participación %, con etiqueta contextual
+        //    según la vista (Cantidad vs Valor, % sufijo para avance).
+        //  - Geomap legend: el `label` override devolvía 0 porque le
+        //    pasaba un shape-object a formatNumber. Reemplazado por
+        //    `axisConfig.tickFormat` que recibe números reales.
+        //  - line/area ahora aplican el tooltipCfg enriquecido (antes
+        //    usaban el tooltip por defecto de d3plus).
+        if ( version_compare( $from_version, '2.5.2', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.5.2: vigencia/entidad normalizadas, tooltips ricos, geomap legend fix.' );
+        }
     }
 
     /**
