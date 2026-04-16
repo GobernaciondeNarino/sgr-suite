@@ -181,6 +181,9 @@ class SGR_Suite_Visualizer {
             'x_labels_rotate'   => max( 0, min( absint( $raw['x_labels_rotate'] ?? 0 ), 90 ) ),
             'x_labels_size'     => max( 8, min( absint( $raw['x_labels_size'] ?? 12 ), 24 ) ),
             'x_labels_visible'  => ! empty( $raw['x_labels_visible'] ),
+            // Títulos personalizables de los ejes (v2.5.3). Vacío = sin título.
+            'x_title'           => sanitize_text_field( wp_unslash( $raw['x_title'] ?? '' ) ),
+            'y_title'           => sanitize_text_field( wp_unslash( $raw['y_title'] ?? '' ) ),
         ];
 
         update_post_meta( $post_id, self::META_CONFIG, $config );
@@ -675,6 +678,8 @@ class SGR_Suite_Visualizer {
             'x_labels_rotate'  => 0,
             'x_labels_size'    => 12,
             'x_labels_visible' => true,
+            'x_title'          => '',
+            'y_title'          => '',
         ];
 
         $config = get_post_meta( $chart_id, self::META_CONFIG, true );
@@ -743,6 +748,8 @@ class SGR_Suite_Visualizer {
                 'x_labels_rotate'  => (int) ( $config['x_labels_rotate'] ?? 0 ),
                 'x_labels_size'    => (int) ( $config['x_labels_size'] ?? 12 ),
                 'x_labels_visible' => ! empty( $config['x_labels_visible'] ?? true ),
+                'x_title'          => (string) ( $config['x_title'] ?? '' ),
+                'y_title'          => (string) ( $config['y_title'] ?? '' ),
                 'legend_icons'     => $this->build_legend_icons( $data, $config['colors'] ?? [] ),
             ],
         ];
@@ -790,6 +797,8 @@ class SGR_Suite_Visualizer {
         $x_size        = max( 8, min( absint( wp_unslash( $_POST['x_labels_size'] ?? 12 ) ), 24 ) );
         $x_visible     = ! empty( $_POST['x_labels_visible'] );
         $show_legend   = ! empty( $_POST['show_legend'] );
+        $x_title       = sanitize_text_field( wp_unslash( $_POST['x_title'] ?? '' ) );
+        $y_title       = sanitize_text_field( wp_unslash( $_POST['y_title'] ?? '' ) );
 
         $data = $this->database->execute_chart_view( $view_key, $limit, $order_dir );
 
@@ -805,6 +814,8 @@ class SGR_Suite_Visualizer {
             'x_labels_rotate'  => $x_rotate,
             'x_labels_size'    => $x_size,
             'x_labels_visible' => $x_visible,
+            'x_title'          => $x_title,
+            'y_title'          => $y_title,
             'legend_icons'     => $this->build_legend_icons( $data, $colors ),
         ];
 

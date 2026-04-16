@@ -216,6 +216,26 @@ foreach ( $views as $vk => $vi ) {
                 </td>
             </tr>
             <tr>
+                <th><label for="sgr-x-title"><?php esc_html_e( 'Título del eje X', 'sgr-suite' ); ?></label></th>
+                <td>
+                    <input type="text" name="sgr_chart[x_title]" id="sgr-x-title"
+                           value="<?php echo esc_attr( $config['x_title'] ?? '' ); ?>"
+                           class="regular-text"
+                           placeholder="<?php esc_attr_e( 'Ej: Dependencia, Vigencia, Municipio…', 'sgr-suite' ); ?>">
+                    <p class="description"><?php esc_html_e( 'Texto descriptivo del eje horizontal. Déjalo vacío para no mostrar título.', 'sgr-suite' ); ?></p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="sgr-y-title"><?php esc_html_e( 'Título del eje Y', 'sgr-suite' ); ?></label></th>
+                <td>
+                    <input type="text" name="sgr_chart[y_title]" id="sgr-y-title"
+                           value="<?php echo esc_attr( $config['y_title'] ?? '' ); ?>"
+                           class="regular-text"
+                           placeholder="<?php esc_attr_e( 'Ej: Inversión (COP), Proyectos, Avance (%)…', 'sgr-suite' ); ?>">
+                    <p class="description"><?php esc_html_e( 'Texto descriptivo del eje vertical. Déjalo vacío para no mostrar título.', 'sgr-suite' ); ?></p>
+                </td>
+            </tr>
+            <tr>
                 <th><?php esc_html_e( 'Opciones', 'sgr-suite' ); ?></th>
                 <td>
                     <label><input type="checkbox" name="sgr_chart[show_legend]" value="1" <?php checked( $config['show_legend'] ?? true ); ?>> <?php esc_html_e( 'Mostrar leyenda (compatibilidad)', 'sgr-suite' ); ?></label><br>

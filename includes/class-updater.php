@@ -205,6 +205,30 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.5.2: vigencia/entidad normalizadas, tooltips ricos, geomap legend fix.' );
         }
+
+        // v2.5.3: Fix del eje X + títulos de ejes + tooltip geomap universal.
+        //  - Rotación y visibilidad de etiquetas del eje X se aplican
+        //    ahora vía DOM post-render (applyAxisDomOverrides). D3plus v2
+        //    ignoraba silenciosamente shapeConfig.labelConfig.rotate y
+        //    tickFormat:()=>"" no colapsaba el layout. Ahora buscamos los
+        //    <text> del eje en el SVG renderizado y aplicamos display y
+        //    transform directamente (dos pasadas, 120ms + 600ms, para
+        //    cubrir la animación de entrada).
+        //  - Nuevos campos x_title / y_title para personalizar el título
+        //    de cada eje. Se envían como title + titleConfig a d3plus
+        //    (que sí los honora correctamente).
+        //  - Geomap: pre-relleno de los 64 municipios de Nariño en
+        //    geomap_aggregate(). Antes sólo había filas de data para los
+        //    ~13 municipios con contratos, así que el tooltip sólo
+        //    disparaba en esos; los otros 51 polígonos quedaban mudos
+        //    al pasar el cursor. Ahora cada polígono tiene su fila con
+        //    no_data=true y el tooltip muestra "Sin contratos registrados
+        //    en este municipio" (el render sigue coloreando por value=0
+        //    sobre la paleta secuencial).
+        if ( version_compare( $from_version, '2.5.3', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.5.3: eje X DOM overrides, títulos de ejes, tooltip geomap universal.' );
+        }
     }
 
     /**

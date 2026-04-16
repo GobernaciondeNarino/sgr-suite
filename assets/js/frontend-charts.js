@@ -151,57 +151,133 @@
      * se ignora silenciosamente.
      */
     function applyXAxisConfig(chart, chartType, config) {
-        if (!chart || typeof chart.xConfig !== 'function') { return; }
+        if (!chart) { return; }
 
-        // Tipos donde el eje X no aplica.
+        // Tipos donde los ejes no aplican.
         var skip = ['pie', 'donut', 'treemap', 'pack', 'geomap'];
         if (skip.indexOf(chartType) !== -1) { return; }
 
-        var visible = config.x_labels_visible !== false;  // default: true
-        var rotate  = parseInt(config.x_labels_rotate || 0, 10) || 0;
         var size    = parseInt(config.x_labels_size || 12, 10) || 12;
+        var xTitle  = String(config.x_title || '').trim();
+        var yTitle  = String(config.y_title || '').trim();
 
-        // IMPORTANTE: d3plus v2 Axis espera `labels` y `ticks` como ARRAYS
-        // (no booleanos). Si pasamos `labels: true` o `ticks: undefined`
-        // el render() interno hace `this._labels.slice()` y truena con
-        // "slice is not a function". Por eso sólo pasamos shapeConfig.
-        var xConf = {
-            shapeConfig: {
-                labelConfig: {
-                    fontSize: size,
-                    rotate: rotate
-                }
-            }
-        };
-
-        // Para ocultar las etiquetas usamos tickFormat que devuelve '',
-        // que es compatible con cualquier versión del axis.
-        if (!visible) {
-            xConf.tickFormat = function () { return ''; };
-        }
-
-        try {
-            chart.xConfig(xConf);
-        } catch (err) {
-            console.warn('SGR Chart: xConfig no aplicado:', err && err.message);
-        }
-
-        // barH invierte ejes: también aplicamos a yConfig para preservar
-        // consistencia visual (las etiquetas textuales ahora están en Y).
-        if (chartType === 'barH' && typeof chart.yConfig === 'function') {
-            var yConf = {
+        // NOTA v2.5.3: la rotación y la visibilidad de etiquetas de tick
+        // se aplican vía DOM post-render (applyAxisDomOverrides) porque
+        // d3plus v2 ignora silenciosamente `shapeConfig.labelConfig.rotate`
+        // cuando el auto-layout decide que "no hay crowding" y no expone
+        // una forma limpia de ocultar las labels sin romper el layout.
+        // Aquí sólo pasamos configs que sí honora: title, titleConfig y
+        // fontSize.
+        if (typeof chart.xConfig === 'function') {
+            var xConf = {
                 shapeConfig: {
-                    labelConfig: {
-                        fontSize: size,
-                        rotate: 0
-                    }
+                    labelConfig: { fontSize: size }
                 }
             };
-            if (!visible) {
-                yConf.tickFormat = function () { return ''; };
+            if (xTitle) {
+                xConf.title = xTitle;
+                xConf.titleConfig = { fontSize: Math.max(12, size + 2), fontWeight: 600 };
+            }
+            try { chart.xConfig(xConf); } catch (err) {
+                console.warn('SGR Chart: xConfig no aplicado:', err && err.message);
+            }
+        }
+
+        if (typeof chart.yConfig === 'function') {
+            var yConf = {
+                shapeConfig: {
+                    labelConfig: { fontSize: size }
+                }
+            };
+            if (yTitle) {
+                yConf.title = yTitle;
+                yConf.titleConfig = { fontSize: Math.max(12, size + 2), fontWeight: 600 };
             }
             try { chart.yConfig(yConf); } catch (_) { /* ignore */ }
         }
+    }
+
+    /**
+     * Post-procesador DOM de los ejes tras chart.render().
+     *
+     * D3plus v2 a menudo ignora `shapeConfig.labelConfig.rotate` cuando
+     * el auto-layout decide que no hace falta rotar, y no expone una
+     * forma directa de ocultar las etiquetas de tick sin romper el
+     * layout. Para que los controles del admin funcionen de verdad,
+     * buscamos los `<text>` del eje correspondiente y aplicamos:
+     *   - `display:none` si el usuario desmarcó "Mostrar etiquetas".
+     *   - `transform: rotate(N, x, y)` + text-anchor cuando rotate > 0.
+     *
+     * La heurística localiza el eje por posición en el SVG (banda
+     * inferior para X, izquierda para barH). Se ejecuta en dos pasadas
+     * (rápida + tardía) para cubrir la animación de entrada.
+     */
+    function applyAxisDomOverrides(container, config, chartType) {
+        var skip = ['pie', 'donut', 'treemap', 'pack', 'geomap'];
+        if (skip.indexOf(chartType) !== -1) { return; }
+        if (!container) { return; }
+
+        var visible = config.x_labels_visible !== false;
+        var rotate  = parseInt(config.x_labels_rotate || 0, 10) || 0;
+
+        [120, 600].forEach(function (delay) {
+            setTimeout(function () {
+                applyAxisOverridesOnce(container, visible, rotate, chartType);
+            }, delay);
+        });
+    }
+
+    function applyAxisOverridesOnce(container, visible, rotate, chartType) {
+        var svg = container.querySelector('svg');
+        if (!svg) { return; }
+
+        // Para barH las categorías están en el eje Y; para el resto en X.
+        var categoricalAxisIsX = (chartType !== 'barH');
+
+        var svgBox = svg.getBoundingClientRect();
+        if (!svgBox.width || !svgBox.height) { return; }
+
+        var textNodes = svg.querySelectorAll('text');
+        if (!textNodes.length) { return; }
+
+        Array.prototype.forEach.call(textNodes, function (t) {
+            // Excluir textos dentro de grupos marcados como título.
+            var parent = t.parentNode;
+            while (parent && parent !== svg) {
+                var cls = (parent.getAttribute && parent.getAttribute('class')) || '';
+                if (/title/i.test(cls)) { return; }
+                parent = parent.parentNode;
+            }
+
+            var r = t.getBoundingClientRect();
+            if (!r.width && !r.height) { return; }
+
+            var inXBand = ( r.top > svgBox.top + svgBox.height * 0.78 );
+            var inYBand = ( r.left < svgBox.left + svgBox.width * 0.22 );
+
+            var isCategoricalTick = categoricalAxisIsX ? inXBand : inYBand;
+            if (!isCategoricalTick) { return; }
+
+            // Visibilidad
+            t.style.display = visible ? '' : 'none';
+
+            // Rotación sólo cuando el eje categórico es el X (para barH
+            // las etiquetas van horizontales en Y, rotarlas sería raro).
+            if (visible && categoricalAxisIsX) {
+                if (rotate > 0) {
+                    var x = t.getAttribute('x') || 0;
+                    var y = t.getAttribute('y') || 0;
+                    t.setAttribute('transform', 'rotate(' + rotate + ' ' + x + ' ' + y + ')');
+                    // Anchor: para rotaciones pronunciadas "end" cuelga
+                    // el texto bajo el tick; "middle" lo centra.
+                    t.setAttribute('text-anchor', rotate >= 30 ? 'end' : 'middle');
+                } else {
+                    // Restaurar layout nativo si el usuario bajó la rotación.
+                    t.removeAttribute('transform');
+                    t.setAttribute('text-anchor', 'middle');
+                }
+            }
+        });
     }
 
     /**
@@ -759,6 +835,15 @@
                                 },
                                 body: function (d) {
                                     if (!d) return '<em>Sin datos</em>';
+
+                                    // v2.5.3: los polígonos de municipios sin
+                                    // contratos ahora también reciben una fila
+                                    // de data (con no_data=true) para que el
+                                    // tooltip dispare en todo Nariño.
+                                    if (d.no_data) {
+                                        return '<em>Sin contratos registrados en este municipio.</em>';
+                                    }
+
                                     var metric  = (config.data_view && config.data_view.indexOf('contratos') !== -1)
                                         ? 'Contratos'
                                         : 'Valor';
@@ -781,7 +866,7 @@
                                     if (d.dependencias && d.dependencias.length) {
                                         lines.push('<strong>Dependencias:</strong> ' + d.dependencias.join(', '));
                                     }
-                                    return lines.length ? lines.join('<br/>') : '<em>Sin contratos registrados</em>';
+                                    return lines.length ? lines.join('<br/>') : '<em>Sin contratos registrados.</em>';
                                 }
                             });
                         break;
@@ -806,12 +891,16 @@
                 try { chart.legend(false); } catch (_) { /* ignore */ }
             }
 
-            // Aplicar configuración de etiquetas del eje X (si el chart
-            // la soporta). D3plus v2 Bar/Line/Area/Plot aceptan xConfig
-            // con shapeConfig.labelConfig para ajustar fuente y rotación.
+            // Aplicar configuración base de los ejes (title, fontSize).
             applyXAxisConfig(chart, chartType, config);
 
             chart.render();
+
+            // Post-procesamiento DOM de los ejes: rotación forzada y
+            // ocultamiento real de las etiquetas de tick. D3plus v2 no
+            // siempre honora estos configs y el usuario espera que los
+            // controles del admin se reflejen exactamente.
+            applyAxisDomOverrides(container, config, chartType);
 
             // Leyenda HTML personalizada (iconos o texto) se construye
             // después del render para insertarse en el wrapper. El admin

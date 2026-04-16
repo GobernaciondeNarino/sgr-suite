@@ -1185,14 +1185,52 @@ class SGR_Suite_Database {
             $entry['avance_promedio'] = $avance_avg;
             $entry['dependencias']    = array_keys( $entry['dependencias'] );
             $entry['value']           = 'valor' === $metric ? (float) $entry['valor_total'] : (int) $entry['contratos'];
+            $entry['no_data']         = false;
             unset( $entry['avance_sum'], $entry['avance_n'], $entry['_contratos'] );
             $out[] = $entry;
         }
 
-        // Ordenar por value y aplicar tope en PHP.
+        // v2.5.3: pre-rellenar municipios sin contratos con value = 0
+        // para que TODOS los 64 polígonos del topojson tengan una fila
+        // de data y d3plus-geomap dispare el tooltip al pasar el cursor
+        // sobre cualquiera (antes sólo había tooltip en los ~13 con
+        // datos reales). Los rellenos llevan `no_data: true` para que
+        // el frontend muestre "Sin contratos registrados" en su tooltip.
+        if ( class_exists( 'SGR_Suite_Municipios_Normalizer' ) ) {
+            $all_munis = SGR_Suite_Municipios_Normalizer::all();
+            foreach ( $all_munis as $muni ) {
+                $divipola = $muni['divipola'];
+                if ( isset( $agg[ $divipola ] ) ) {
+                    continue;
+                }
+                $out[] = [
+                    'id'              => $divipola,
+                    'label'           => $muni['nombre'],
+                    'value'           => 0,
+                    'valor_total'     => 0,
+                    'contratos'       => 0,
+                    'poblacion'       => 0,
+                    'avance_promedio' => 0,
+                    'dependencias'    => [],
+                    'no_data'         => true,
+                ];
+            }
+        }
+
+        // Ordenar por value desc (los de data primero) y luego por
+        // nombre para los sin-data.
         usort(
             $out,
             static function ( $a, $b ) use ( $order_dir ) {
+                $na = ! empty( $a['no_data'] );
+                $nb = ! empty( $b['no_data'] );
+                // Los sin-data van al final sin importar el order_dir.
+                if ( $na !== $nb ) {
+                    return $na ? 1 : -1;
+                }
+                if ( $na && $nb ) {
+                    return strcmp( $a['label'] ?? '', $b['label'] ?? '' );
+                }
                 $va = (float) ( $a['value'] ?? 0 );
                 $vb = (float) ( $b['value'] ?? 0 );
                 if ( $va === $vb ) {
@@ -1205,7 +1243,11 @@ class SGR_Suite_Database {
             }
         );
 
-        $hard_cap = max( 1, min( $limit, 64 ) );
+        // Para geomap devolvemos siempre los 64 (los polígonos existen
+        // todos); `limit` se aplica sólo a los con datos para evitar
+        // truncar el mapa. El tope duro de 64 protege contra inputs
+        // maliciosos.
+        $hard_cap = 64;
         return array_slice( $out, 0, $hard_cap );
     }
 }
