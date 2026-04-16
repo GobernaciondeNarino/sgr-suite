@@ -699,22 +699,27 @@
 
 #sgr-chart-preview-area .sgr-chart-icon-legend {
     padding: 10px 8px 12px;
-    gap: 6px 8px;
+    gap: 6px 10px;
 }
 
-#sgr-chart-preview-area .sgr-chart-icon-legend-item {
+#sgr-chart-preview-area .sgr-chart-icon-legend--text .sgr-chart-icon-legend-item {
     font-size: 11px;
-    padding: 3px 8px 3px 3px;
+    padding: 3px 10px 3px 8px;
 }
 
 #sgr-chart-preview-area .sgr-chart-icon-legend-icon {
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
 }
 
 #sgr-chart-preview-area .sgr-chart-icon-legend-icon svg {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
+}
+
+#sgr-chart-preview-area .sgr-chart-icon-legend-dot {
+    width: 10px;
+    height: 10px;
 }
 
 .sgr-preview-loading {

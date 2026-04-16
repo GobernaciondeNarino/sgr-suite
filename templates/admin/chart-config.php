@@ -184,11 +184,12 @@ foreach ( $views as $vk => $vi ) {
                 <td>
                     <select name="sgr_chart[legend_mode]" id="sgr-legend-mode" class="regular-text">
                         <option value="auto"   <?php selected( $config['legend_mode'] ?? 'auto', 'auto' ); ?>><?php esc_html_e( 'Automática (texto D3plus)', 'sgr-suite' ); ?></option>
-                        <option value="icons"  <?php selected( $config['legend_mode'] ?? 'auto', 'icons' ); ?>><?php esc_html_e( 'Con iconos (personalizada)', 'sgr-suite' ); ?></option>
+                        <option value="text"   <?php selected( $config['legend_mode'] ?? 'auto', 'text' ); ?>><?php esc_html_e( 'Solo texto (personalizada)', 'sgr-suite' ); ?></option>
+                        <option value="icons"  <?php selected( $config['legend_mode'] ?? 'auto', 'icons' ); ?>><?php esc_html_e( 'Solo iconos (personalizada)', 'sgr-suite' ); ?></option>
                         <option value="hidden" <?php selected( $config['legend_mode'] ?? 'auto', 'hidden' ); ?>><?php esc_html_e( 'Oculta', 'sgr-suite' ); ?></option>
                     </select>
                     <p class="description">
-                        <?php esc_html_e( 'La leyenda con iconos asigna automáticamente un icono coherente a cada categoría (dependencia, entidad, vigencia, municipio, riesgo...).', 'sgr-suite' ); ?>
+                        <?php esc_html_e( '"Solo iconos" muestra únicamente los cuadros con iconos coherentes a cada categoría (el nombre aparece como tooltip al pasar el cursor). "Solo texto" usa un punto de color + el nombre.', 'sgr-suite' ); ?>
                     </p>
                 </td>
             </tr>
