@@ -70,7 +70,10 @@ class SGR_Suite_Visualizer {
         // que el chart real tenga espacio suficiente — antes estaba en la
         // columna lateral y quedaba demasiado angosto.
         add_meta_box( 'sgr_chart_preview', esc_html__( 'Vista Previa del Gráfico', 'sgr-suite' ), [ $this, 'render_preview_box' ], self::CPT_CHART, 'normal', 'low' );
+
+        // Columna lateral (debajo de Publicar + Shortcode).
         add_meta_box( 'sgr_chart_shortcode', esc_html__( 'Shortcode', 'sgr-suite' ), [ $this, 'render_shortcode_box' ], self::CPT_CHART, 'side', 'high' );
+        add_meta_box( 'sgr_chart_data_widget', esc_html__( 'Datos de la Vista', 'sgr-suite' ), [ $this, 'render_data_widget_box' ], self::CPT_CHART, 'side', 'low' );
     }
 
     public function render_meta_box( \WP_Post $post ): void {
@@ -85,6 +88,24 @@ class SGR_Suite_Visualizer {
         }
         echo '<div style="background:#f0f9ff;padding:12px;border:1px solid #348afb;margin:-6px -12px;">';
         echo '<code style="font-size:13px;display:block;word-break:break-all;">[sgr_chart id="' . esc_html( $post->ID ) . '"]</code>';
+        echo '</div>';
+    }
+
+    /**
+     * Widget lateral con la tabla de datos de la vista seleccionada.
+     *
+     * Se puebla en vivo desde admin-charts.js al refrescar la vista previa
+     * del gráfico (mismo AJAX), así el editor puede inspeccionar qué
+     * información existe antes de decidir el tipo de gráfico.
+     */
+    public function render_data_widget_box( \WP_Post $post ): void {
+        echo '<p class="description" style="margin:0 0 10px;">';
+        echo esc_html__( 'Muestra los primeros registros devueltos por la vista seleccionada. Se actualiza automáticamente al cambiar la vista.', 'sgr-suite' );
+        echo '</p>';
+        echo '<div id="sgr-chart-data-widget-area" class="sgr-chart-data-widget">';
+        echo '<p class="description sgr-data-widget-placeholder" style="text-align:center;padding:24px 6px;">';
+        echo esc_html__( 'Selecciona una vista para ver los datos.', 'sgr-suite' );
+        echo '</p>';
         echo '</div>';
     }
 
@@ -126,9 +147,28 @@ class SGR_Suite_Visualizer {
         $view_keys   = array_keys( $views );
         $chart_types = array_keys( $this->get_chart_types() );
 
+        $data_view    = in_array( $raw['data_view'] ?? '', $view_keys, true )
+            ? $raw['data_view']
+            : 'valor_por_dependencia';
+        $chart_type   = in_array( $raw['chart_type'] ?? '', $chart_types, true )
+            ? $raw['chart_type']
+            : 'bar';
+
+        // Validar compatibilidad vista ↔ tipo: si el usuario envía una
+        // combinación incompatible, se fuerza al primer tipo compatible
+        // declarado para esa vista.
+        $compat_charts = $this->get_view_chart_compatibility()[ $data_view ] ?? [];
+        if ( ! empty( $compat_charts ) && ! in_array( $chart_type, $compat_charts, true ) ) {
+            $this->logger->warning( sprintf(
+                'Gráfico #%d: combinación incompatible %s + %s → auto-corregida a %s.',
+                $post_id, $chart_type, $data_view, $compat_charts[0]
+            ) );
+            $chart_type = $compat_charts[0];
+        }
+
         $config = [
-            'chart_type'        => in_array( $raw['chart_type'] ?? '', $chart_types, true ) ? $raw['chart_type'] : 'bar',
-            'data_view'         => in_array( $raw['data_view'] ?? '', $view_keys, true ) ? $raw['data_view'] : 'valor_por_dependencia',
+            'chart_type'        => $chart_type,
+            'data_view'         => $data_view,
             'limit'             => min( absint( $raw['limit'] ?? 20 ), 500 ),
             'order_dir'         => in_array( strtoupper( $raw['order_dir'] ?? 'DESC' ), [ 'ASC', 'DESC' ], true ) ? strtoupper( $raw['order_dir'] ) : 'DESC',
             'chart_height'      => max( 200, min( absint( $raw['chart_height'] ?? 400 ), 1200 ) ),
@@ -136,7 +176,7 @@ class SGR_Suite_Visualizer {
             'show_toolbar'      => ! empty( $raw['show_toolbar'] ),
             'number_format'     => in_array( $raw['number_format'] ?? 'colombiano', [ 'colombiano', 'millones', 'internacional', 'sin_formato' ], true ) ? $raw['number_format'] : 'colombiano',
             'colors'            => $this->sanitize_colors( $raw['colors'] ?? '' ),
-            // Nuevas opciones visuales (v2.4.0).
+            // Opciones visuales (v2.4.0+).
             'legend_mode'       => in_array( $raw['legend_mode'] ?? 'auto', [ 'auto', 'icons', 'hidden' ], true ) ? $raw['legend_mode'] : 'auto',
             'x_labels_rotate'   => max( 0, min( absint( $raw['x_labels_rotate'] ?? 0 ), 90 ) ),
             'x_labels_size'     => max( 8, min( absint( $raw['x_labels_size'] ?? 12 ), 24 ) ),
@@ -395,29 +435,222 @@ class SGR_Suite_Visualizer {
      *                                 soportados. Si una vista no aparece,
      *                                 es compatible con todos los tipos.
      */
-    public function get_view_chart_compatibility(): array {
+    /**
+     * Metadatos completos de las vistas: compatibilidad con tipos de
+     * gráfico + categoría funcional. Única fuente de verdad de v2.5.0.
+     *
+     * Cada entrada declara:
+     *  - charts:   lista ordenada de chart_type compatibles. El primer
+     *              elemento se considera el tipo "recomendado" para la
+     *              vista y se usa como fallback automático.
+     *  - category: clave de agrupación para el selector del admin
+     *              (totales, rankings, distribucion, avance, series,
+     *              temporal, geografico).
+     *
+     * @return array<string,array{charts:string[],category:string}>
+     */
+    public function get_view_metadata(): array {
         return [
-            // Las vistas geomap requieren un tipo geomap y viceversa.
-            'geomap_valor_municipio'     => [ 'geomap' ],
-            'geomap_contratos_municipio' => [ 'geomap' ],
-            // Scatter funciona de manera nativa con la vista scatter.
-            'scatter_valor_avance'       => [ 'scatter', 'plot' ],
-            // Series: apiladas/agrupadas/area.
-            'valor_dependencia_x_entidad'     => [ 'stacked_bar', 'grouped_bar', 'bar', 'area' ],
-            'proyectos_dependencia_x_entidad' => [ 'stacked_bar', 'grouped_bar', 'bar' ],
-            'proyectos_vs_contratos_x_dependencia' => [ 'grouped_bar', 'stacked_bar', 'bar' ],
-            'metas_vs_contratos_x_dependencia'     => [ 'grouped_bar', 'stacked_bar', 'bar' ],
-            'valor_municipio_x_dependencia'   => [ 'stacked_bar', 'grouped_bar', 'bar' ],
-            'valor_entidad_x_dependencia'     => [ 'stacked_bar', 'grouped_bar', 'bar' ],
-            'vigencia_dependencia_x'          => [ 'stacked_bar', 'area', 'line', 'grouped_bar' ],
-            'proyectos_vigencia_x_dependencia' => [ 'grouped_bar', 'stacked_bar', 'line' ],
-            'ranking_dependencias_vigencia'   => [ 'grouped_bar', 'line', 'stacked_bar' ],
-            'matrix_municipio_dependencia'    => [ 'stacked_bar', 'grouped_bar', 'treemap' ],
-            // Distribución categórica (buckets): ideal para pie/donut.
-            'distribucion_proyectos_con_sin_contrato' => [ 'pie', 'donut', 'bar' ],
-            'distribucion_proyectos_con_sin_metas'    => [ 'pie', 'donut', 'bar' ],
-            'distribucion_riesgo_contratos'           => [ 'pie', 'donut', 'bar' ],
+            // =============================================================
+            // TOTALES Y AGREGADOS
+            // =============================================================
+            'valor_por_dependencia' => [
+                'category' => 'totales',
+                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
+            ],
+            'proyectos_por_dependencia' => [
+                'category' => 'totales',
+                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
+            ],
+            'valor_por_entidad' => [
+                'category' => 'totales',
+                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
+            ],
+            'proyectos_por_entidad' => [
+                'category' => 'totales',
+                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
+            ],
+            'metas_por_dependencia' => [
+                'category' => 'totales',
+                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
+            ],
+            'contratos_por_dependencia' => [
+                'category' => 'totales',
+                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
+            ],
+            'valor_por_municipio' => [
+                'category' => 'totales',
+                'charts'   => [ 'bar', 'barH', 'treemap', 'pack' ],
+            ],
+            'poblacion_por_municipio' => [
+                'category' => 'totales',
+                'charts'   => [ 'bar', 'barH', 'treemap', 'pack' ],
+            ],
+
+            // =============================================================
+            // RANKINGS / TOP N
+            // =============================================================
+            'top_proyectos_valor' => [
+                'category' => 'rankings',
+                'charts'   => [ 'barH', 'bar', 'treemap', 'pack' ],
+            ],
+            'top_proyectos_contratos' => [
+                'category' => 'rankings',
+                'charts'   => [ 'barH', 'bar', 'treemap', 'pack' ],
+            ],
+            'top_proyectos_metas' => [
+                'category' => 'rankings',
+                'charts'   => [ 'barH', 'bar', 'treemap', 'pack' ],
+            ],
+
+            // =============================================================
+            // DISTRIBUCIÓN / BUCKETS
+            // =============================================================
+            'distribucion_proyectos_con_sin_contrato' => [
+                'category' => 'distribucion',
+                'charts'   => [ 'pie', 'donut', 'bar', 'barH' ],
+            ],
+            'distribucion_proyectos_con_sin_metas' => [
+                'category' => 'distribucion',
+                'charts'   => [ 'pie', 'donut', 'bar', 'barH' ],
+            ],
+            'distribucion_riesgo_contratos' => [
+                'category' => 'distribucion',
+                'charts'   => [ 'pie', 'donut', 'bar', 'barH' ],
+            ],
+
+            // =============================================================
+            // AVANCE FÍSICO
+            // =============================================================
+            'avance_fisico_por_contrato' => [
+                'category' => 'avance',
+                'charts'   => [ 'barH', 'bar' ],
+            ],
+            'avance_por_dependencia_promedio' => [
+                'category' => 'avance',
+                'charts'   => [ 'bar', 'barH' ],
+            ],
+            'avance_por_entidad' => [
+                'category' => 'avance',
+                'charts'   => [ 'bar', 'barH' ],
+            ],
+            'scatter_valor_avance' => [
+                'category' => 'avance',
+                'charts'   => [ 'scatter' ],
+            ],
+
+            // =============================================================
+            // CRUCES CON SERIES (stacked / grouped)
+            // =============================================================
+            'valor_dependencia_x_entidad' => [
+                'category' => 'series',
+                'charts'   => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH', 'treemap' ],
+            ],
+            'proyectos_dependencia_x_entidad' => [
+                'category' => 'series',
+                'charts'   => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH' ],
+            ],
+            'proyectos_vs_contratos_x_dependencia' => [
+                'category' => 'series',
+                'charts'   => [ 'grouped_bar', 'stacked_bar', 'bar', 'barH' ],
+            ],
+            'metas_vs_contratos_x_dependencia' => [
+                'category' => 'series',
+                'charts'   => [ 'grouped_bar', 'stacked_bar', 'bar', 'barH' ],
+            ],
+            'valor_municipio_x_dependencia' => [
+                'category' => 'series',
+                'charts'   => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH' ],
+            ],
+            'valor_entidad_x_dependencia' => [
+                'category' => 'series',
+                'charts'   => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH' ],
+            ],
+            'matrix_municipio_dependencia' => [
+                'category' => 'series',
+                'charts'   => [ 'stacked_bar', 'grouped_bar', 'treemap' ],
+            ],
+
+            // =============================================================
+            // TEMPORAL / VIGENCIAS
+            // =============================================================
+            'vigencia_valor' => [
+                'category' => 'temporal',
+                'charts'   => [ 'bar', 'line', 'area', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
+            ],
+            'vigencia_dependencia_x' => [
+                'category' => 'temporal',
+                'charts'   => [ 'stacked_bar', 'grouped_bar', 'area', 'line', 'bar' ],
+            ],
+            'proyectos_vigencia_x_dependencia' => [
+                'category' => 'temporal',
+                'charts'   => [ 'grouped_bar', 'stacked_bar', 'line', 'area', 'bar' ],
+            ],
+            'ranking_dependencias_vigencia' => [
+                'category' => 'temporal',
+                'charts'   => [ 'line', 'area', 'grouped_bar', 'stacked_bar', 'bar' ],
+            ],
+
+            // =============================================================
+            // GEOGRÁFICO
+            // =============================================================
+            'geomap_valor_municipio' => [
+                'category' => 'geografico',
+                'charts'   => [ 'geomap' ],
+            ],
+            'geomap_contratos_municipio' => [
+                'category' => 'geografico',
+                'charts'   => [ 'geomap' ],
+            ],
         ];
+    }
+
+    /**
+     * Categorías funcionales con su etiqueta visible. El orden importa:
+     * así se mostrarán los optgroup en el selector del admin.
+     *
+     * @return array<string,string>
+     */
+    public function get_view_categories(): array {
+        return [
+            'totales'      => esc_html__( 'Totales y Agregados', 'sgr-suite' ),
+            'rankings'     => esc_html__( 'Rankings / Top N', 'sgr-suite' ),
+            'distribucion' => esc_html__( 'Distribución / Categorías', 'sgr-suite' ),
+            'avance'       => esc_html__( 'Avance Físico', 'sgr-suite' ),
+            'series'       => esc_html__( 'Cruces con Series', 'sgr-suite' ),
+            'temporal'     => esc_html__( 'Evolución Temporal', 'sgr-suite' ),
+            'geografico'   => esc_html__( 'Geográfico (Geomap)', 'sgr-suite' ),
+        ];
+    }
+
+    /**
+     * Matriz vista → lista de chart_type compatibles (formato plano).
+     *
+     * Se alimenta de get_view_metadata() para mantener una única fuente
+     * de verdad. Expuesta al JS del admin vía wp_localize_script para el
+     * filtrado bidireccional.
+     *
+     * @return array<string,string[]>
+     */
+    public function get_view_chart_compatibility(): array {
+        $out = [];
+        foreach ( $this->get_view_metadata() as $view_key => $meta ) {
+            $out[ $view_key ] = $meta['charts'] ?? [];
+        }
+        return $out;
+    }
+
+    /**
+     * Devolver el primer chart_type compatible con la vista dada, o null
+     * si la vista no existe en la matriz.
+     */
+    public function get_recommended_chart_for_view( string $view_key ): ?string {
+        $meta = $this->get_view_metadata();
+        if ( ! isset( $meta[ $view_key ] ) ) {
+            return null;
+        }
+        $charts = $meta[ $view_key ]['charts'] ?? [];
+        return ! empty( $charts ) ? $charts[0] : null;
     }
 
     /**
@@ -657,7 +890,14 @@ class SGR_Suite_Visualizer {
             'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
             'nonce'         => wp_create_nonce( 'sgr_suite_admin_nonce' ),
             'compatibility' => $this->get_view_chart_compatibility(),
+            'categories'    => $this->get_view_categories(),
             'topojsonUrl'   => $this->get_topojson_url(),
+            'i18n'          => [
+                'preview_empty'       => esc_html__( 'No hay datos para mostrar.', 'sgr-suite' ),
+                'data_preview_rows'   => esc_html__( 'Mostrando %1$d de %2$d registros', 'sgr-suite' ),
+                'auto_switch_chart'   => esc_html__( 'Tipo de gráfico ajustado automáticamente a uno compatible con la vista.', 'sgr-suite' ),
+                'auto_switch_view'    => esc_html__( 'Vista ajustada automáticamente a una compatible con el tipo de gráfico.', 'sgr-suite' ),
+            ],
         ] );
     }
 

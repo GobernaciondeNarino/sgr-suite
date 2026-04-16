@@ -74,50 +74,59 @@ foreach ( $views as $vk => $vi ) {
                 <td>
                     <select name="sgr_chart[data_view]" id="sgr-data-view" class="regular-text" style="min-width:360px;">
                         <?php
-                        // Clasificar vistas en tres grupos: nuevas (V-XX del roadmap),
-                        // con series, y simples.
-                        $nuevas_views = [];
-                        $simple_views = [];
-                        $series_views = [];
+                        // v2.5.0: agrupación por categoría funcional declarada en
+                        // SGR_Suite_Visualizer::get_view_metadata(). Las vistas sin
+                        // metadata caen al grupo "otros" para no perderse.
+                        $metadata    = $visualizer->get_view_metadata();
+                        $categories  = $visualizer->get_view_categories();
+                        $current_view = $config['data_view'] ?? 'valor_por_dependencia';
+
+                        $grouped = [];
+                        foreach ( $categories as $cat_key => $_ ) {
+                            $grouped[ $cat_key ] = [];
+                        }
+                        $grouped['otros'] = [];
+
                         foreach ( $data_views as $vk => $vl ) {
-                            $view_def = $views[ $vk ] ?? [];
-                            $columns  = $view_def['columns'] ?? [];
-                            $is_nueva = ( strpos( (string) $vl, 'V-' ) === 0 );
-                            if ( $is_nueva ) {
-                                $nuevas_views[ $vk ] = $vl;
-                            } elseif ( in_array( 'series', $columns, true ) ) {
-                                $series_views[ $vk ] = $vl;
+                            $cat = $metadata[ $vk ]['category'] ?? 'otros';
+                            if ( ! isset( $grouped[ $cat ] ) ) {
+                                $grouped['otros'][ $vk ] = $vl;
                             } else {
-                                $simple_views[ $vk ] = $vl;
+                                $grouped[ $cat ][ $vk ] = $vl;
                             }
                         }
-                        $current_view = $config['data_view'] ?? 'valor_por_dependencia';
+
+                        foreach ( $categories as $cat_key => $cat_label ) :
+                            if ( empty( $grouped[ $cat_key ] ) ) {
+                                continue;
+                            }
                         ?>
-                        <?php if ( ! empty( $nuevas_views ) ) : ?>
-                        <optgroup label="<?php esc_attr_e( 'Nuevas vistas (roadmap sgr_views.md)', 'sgr-suite' ); ?>">
-                        <?php foreach ( $nuevas_views as $vk => $vl ) : ?>
-                            <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $current_view, $vk ); ?>>
-                                <?php echo esc_html( $vl ); ?>
-                            </option>
+                            <optgroup label="<?php echo esc_attr( $cat_label ); ?>">
+                                <?php foreach ( $grouped[ $cat_key ] as $vk => $vl ) :
+                                    $compat = $metadata[ $vk ]['charts'] ?? [];
+                                ?>
+                                    <option value="<?php echo esc_attr( $vk ); ?>"
+                                            data-charts="<?php echo esc_attr( implode( ',', $compat ) ); ?>"
+                                            <?php selected( $current_view, $vk ); ?>>
+                                        <?php echo esc_html( $vl ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </optgroup>
                         <?php endforeach; ?>
-                        </optgroup>
+
+                        <?php if ( ! empty( $grouped['otros'] ) ) : ?>
+                            <optgroup label="<?php esc_attr_e( 'Otros', 'sgr-suite' ); ?>">
+                                <?php foreach ( $grouped['otros'] as $vk => $vl ) : ?>
+                                    <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $current_view, $vk ); ?>>
+                                        <?php echo esc_html( $vl ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </optgroup>
                         <?php endif; ?>
-                        <optgroup label="<?php esc_attr_e( 'Vistas simples (Barras, Pie, Treemap, Líneas)', 'sgr-suite' ); ?>">
-                        <?php foreach ( $simple_views as $vk => $vl ) : ?>
-                            <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $current_view, $vk ); ?>>
-                                <?php echo esc_html( $vl ); ?>
-                            </option>
-                        <?php endforeach; ?>
-                        </optgroup>
-                        <optgroup label="<?php esc_attr_e( 'Vistas con series (Barras Apiladas / Agrupadas)', 'sgr-suite' ); ?>">
-                        <?php foreach ( $series_views as $vk => $vl ) : ?>
-                            <option value="<?php echo esc_attr( $vk ); ?>" <?php selected( $current_view, $vk ); ?>>
-                                <?php echo esc_html( $vl ); ?>
-                            </option>
-                        <?php endforeach; ?>
-                        </optgroup>
                     </select>
-                    <p class="description"><?php esc_html_e( 'Las vistas con series son ideales para gráficos de Barras Apiladas o Agrupadas. Las vistas V-XX provienen del roadmap del API SGR y en su mayoría requieren el tipo de gráfico que las acompaña (scatter, stacked, etc).', 'sgr-suite' ); ?></p>
+                    <p class="description">
+                        <?php esc_html_e( 'Las vistas se agrupan por función: Totales, Rankings, Distribución, Avance, Series (apiladas/agrupadas), Temporal y Geográfico. Al cambiar la vista el tipo de gráfico se ajusta automáticamente si la combinación es incompatible.', 'sgr-suite' ); ?>
+                    </p>
                 </td>
             </tr>
             <tr>

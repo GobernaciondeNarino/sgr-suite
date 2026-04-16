@@ -62,24 +62,35 @@
         },
 
         /* ===========================================
-           Compatibility Filter (chart type ↔ data view)
+           Compatibility Filter (chart type ↔ data view) — BIDIRECCIONAL
            =========================================== */
 
         /**
-         * Cuando se elige un tipo de gráfico (p.ej., geomap), se deben
-         * ocultar las vistas del selector que no son compatibles con ese
-         * tipo. La matriz de compatibilidad llega desde PHP via
-         * sgrChartsAdmin.compatibility: { view_key: [chart_type,...] }.
-         * Las vistas que no aparecen en el mapa se consideran compatibles
-         * con todos los tipos (fallback permisivo).
+         * Matriz de compatibilidad vista → tipos compatibles (llega desde
+         * PHP via sgrChartsAdmin.compatibility). En v2.5.0 la matriz es
+         * exhaustiva: toda vista declara sus tipos, sin fallback permisivo.
+         *
+         * Filtro bidireccional:
+         *   1) Al cambiar el tipo de gráfico se ocultan las vistas
+         *      incompatibles y se salta a la primera válida si la actual
+         *      dejó de serlo.
+         *   2) Al cambiar la vista se deshabilitan los radios de tipos
+         *      incompatibles y se salta al primer tipo válido si el actual
+         *      dejó de serlo (lo cual también re-dispara (1) sobre el nuevo
+         *      tipo — la lógica es idempotente).
          */
         bindCompatibilityFilter: function () {
             var self = this;
             $(document).on('change', '#sgr-data-view', function () {
+                self.applyChartTypeFilter();
                 self.applyCompatibilityFilter();
             });
         },
 
+        /**
+         * Aplica (tipo → vistas): oculta las vistas incompatibles con
+         * el tipo actualmente seleccionado.
+         */
         applyCompatibilityFilter: function () {
             var matrix = (sgrChartsAdmin && sgrChartsAdmin.compatibility) || {};
             var $chartTypeChecked = $('.sgr-chart-type-option input[type="radio"]:checked');
@@ -103,6 +114,8 @@
                 var $opt = $(opt);
                 var key = $opt.val();
                 var allowed = matrix[key];
+                // Sin entrada en la matriz ⇒ legacy permisivo para no romper
+                // configs guardadas antes del exhaustive mapping.
                 var isCompatible = !allowed || allowed.indexOf(currentType) !== -1;
 
                 if (isCompatible) {
@@ -128,12 +141,62 @@
                 group.hidden = visibleCount === 0;
             });
 
-            // Si la vista actualmente seleccionada es incompatible, saltar
-            // automáticamente a la primera opción válida.
             if (!selectedStillValid && firstValidOption !== null) {
                 $select.val(firstValidOption).trigger('change');
                 if (window.console) {
                     window.console.info('[SGR] Vista cambiada a la primera compatible con ' + currentType + ': ' + firstValidOption);
+                }
+            }
+        },
+
+        /**
+         * Aplica (vista → tipos): deshabilita los radios de chart_type
+         * incompatibles con la vista actualmente seleccionada. Si el tipo
+         * seleccionado deja de ser válido, salta al primer tipo permitido.
+         */
+        applyChartTypeFilter: function () {
+            var matrix = (sgrChartsAdmin && sgrChartsAdmin.compatibility) || {};
+            var currentView = $('#sgr-data-view').val();
+            if (!currentView) return;
+
+            var allowed = matrix[currentView];
+            // Sin entrada en la matriz ⇒ permisivo (legacy).
+            if (!allowed || !allowed.length) {
+                $('.sgr-chart-type-option').removeClass('sgr-chart-type-disabled')
+                    .find('input[type="radio"]').prop('disabled', false);
+                return;
+            }
+
+            var $labels = $('.sgr-chart-type-option');
+            var selectedStillValid = false;
+            var firstValidType = null;
+            var currentType = $('.sgr-chart-type-option input[type="radio"]:checked').val();
+
+            $labels.each(function () {
+                var $label = $(this);
+                var $radio = $label.find('input[type="radio"]');
+                var type = $radio.val();
+                var isAllowed = allowed.indexOf(type) !== -1;
+
+                if (isAllowed) {
+                    $label.removeClass('sgr-chart-type-disabled');
+                    $radio.prop('disabled', false);
+                    if (firstValidType === null) firstValidType = type;
+                    if (type === currentType) selectedStillValid = true;
+                } else {
+                    $label.addClass('sgr-chart-type-disabled');
+                    $radio.prop('disabled', true);
+                }
+            });
+
+            if (!selectedStillValid && firstValidType !== null) {
+                // Cambiar selección al primer tipo válido y disparar el
+                // mismo evento que un click humano para que el resto de la
+                // UI (highlight, refreshPreview) reaccione.
+                var $nextRadio = $('.sgr-chart-type-option input[type="radio"][value="' + firstValidType + '"]');
+                $nextRadio.prop('checked', true).trigger('change');
+                if (window.console) {
+                    window.console.info('[SGR] Tipo de gráfico cambiado al primero compatible con ' + currentView + ': ' + firstValidType);
                 }
             }
         },
@@ -271,6 +334,10 @@
                     var chartData = payload.data || [];
                     var cfg       = payload.config || formData;
 
+                    // Siempre actualizamos el widget lateral con la tabla
+                    // de datos, incluso cuando el chart no se puede dibujar.
+                    self.renderDataWidget(chartData);
+
                     if (!chartData.length) {
                         $area.html(
                             '<p style="text-align:center;color:#64748b;padding:30px;">' +
@@ -308,6 +375,70 @@
                     );
                 }
             });
+        },
+
+        /**
+         * Pintar la tabla de datos (widget lateral) con los registros
+         * devueltos por el AJAX de preview. Mantiene la columna lateral
+         * sincronizada con la vista seleccionada en el formulario.
+         */
+        renderDataWidget: function (rows) {
+            var self = this;
+            var $widget = $('#sgr-chart-data-widget-area');
+            if (!$widget.length) return;
+
+            if (!rows || !rows.length) {
+                $widget.html(
+                    '<p class="description sgr-data-widget-empty" style="text-align:center;padding:24px 6px;">' +
+                    'No hay registros para la vista seleccionada.</p>'
+                );
+                return;
+            }
+
+            var total = rows.length;
+            var preview = rows.slice(0, 10);
+            var keys = Object.keys(preview[0]);
+
+            var html = '';
+            html += '<div class="sgr-data-widget-summary">';
+            html += '  <span class="sgr-data-widget-count">' + total + '</span>';
+            html += '  <span class="sgr-data-widget-label">registros</span>';
+            html += '</div>';
+
+            html += '<div class="sgr-data-widget-scroll"><table class="sgr-data-widget-table">';
+            html += '<thead><tr>';
+            keys.forEach(function (k) {
+                html += '<th>' + self.escapeHtml(k) + '</th>';
+            });
+            html += '</tr></thead><tbody>';
+
+            preview.forEach(function (row) {
+                html += '<tr>';
+                keys.forEach(function (k) {
+                    var val = row[k];
+                    var str;
+                    if (val == null) {
+                        str = '';
+                    } else if (typeof val === 'object') {
+                        try { str = JSON.stringify(val); } catch (e) { str = String(val); }
+                    } else {
+                        str = String(val);
+                    }
+                    if (str.length > 42) str = str.substring(0, 39) + '…';
+                    html += '<td>' + self.escapeHtml(str) + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+
+            if (total > preview.length) {
+                html += '<p class="sgr-data-widget-more">' +
+                    'Mostrando ' + preview.length + ' de ' + total + ' registros' +
+                '</p>';
+            }
+
+            $widget.html(html);
         },
 
         /**
