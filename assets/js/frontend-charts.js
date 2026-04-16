@@ -164,10 +164,13 @@
         // NOTA v2.5.3: la rotación y la visibilidad de etiquetas de tick
         // se aplican vía DOM post-render (applyAxisDomOverrides) porque
         // d3plus v2 ignora silenciosamente `shapeConfig.labelConfig.rotate`
-        // cuando el auto-layout decide que "no hay crowding" y no expone
-        // una forma limpia de ocultar las labels sin romper el layout.
-        // Aquí sólo pasamos configs que sí honora: title, titleConfig y
-        // fontSize.
+        // cuando el auto-layout decide que "no hay crowding".
+        //
+        // IMPORTANTE v2.5.4: mantenemos la estructura EXACTA de v2.5.1 que
+        // sabemos que no dispara ".slice is not a function":
+        //   - xConfig siempre con sólo shapeConfig.labelConfig.fontSize + title opcional.
+        //   - yConfig SÓLO cuando es barH (categorías en Y) o hay y_title.
+        //   - Sin `titleConfig` ni `fontWeight` (dejar defaults de d3plus).
         if (typeof chart.xConfig === 'function') {
             var xConf = {
                 shapeConfig: {
@@ -176,22 +179,23 @@
             };
             if (xTitle) {
                 xConf.title = xTitle;
-                xConf.titleConfig = { fontSize: Math.max(12, size + 2), fontWeight: 600 };
             }
             try { chart.xConfig(xConf); } catch (err) {
                 console.warn('SGR Chart: xConfig no aplicado:', err && err.message);
             }
         }
 
-        if (typeof chart.yConfig === 'function') {
-            var yConf = {
-                shapeConfig: {
-                    labelConfig: { fontSize: size }
-                }
-            };
+        // yConfig sólo cuando aporta algo: barH (rota la axis) o título Y.
+        // Llamarlo innecesariamente puede disparar edge-cases internos de
+        // d3plus v2 cuando el chart no se construye aún completamente.
+        var yNeedsUpdate = yTitle || chartType === 'barH';
+        if (yNeedsUpdate && typeof chart.yConfig === 'function') {
+            var yConf = {};
+            if (chartType === 'barH') {
+                yConf.shapeConfig = { labelConfig: { fontSize: size } };
+            }
             if (yTitle) {
                 yConf.title = yTitle;
-                yConf.titleConfig = { fontSize: Math.max(12, size + 2), fontWeight: 600 };
             }
             try { chart.yConfig(yConf); } catch (_) { /* ignore */ }
         }
@@ -220,9 +224,21 @@
         var visible = config.x_labels_visible !== false;
         var rotate  = parseInt(config.x_labels_rotate || 0, 10) || 0;
 
+        // Si no hay nada que aplicar (visibilidad por defecto + sin rotación)
+        // nos ahorramos el DOM poke: d3plus ya posicionó las etiquetas bien.
+        if (visible && rotate === 0) { return; }
+
         [120, 600].forEach(function (delay) {
             setTimeout(function () {
-                applyAxisOverridesOnce(container, visible, rotate, chartType);
+                // Cualquier excepción aquí NO debe propagar — el chart ya
+                // se renderizó; esto es un post-proceso cosmético.
+                try {
+                    applyAxisOverridesOnce(container, visible, rotate, chartType);
+                } catch (err) {
+                    if (window.console && console.warn) {
+                        console.warn('SGR Chart: DOM axis override falló:', err && err.message);
+                    }
+                }
             }, delay);
         });
     }

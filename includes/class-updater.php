@@ -229,6 +229,22 @@ class SGR_Suite_Updater {
             $this->database->clear_chart_caches();
             $this->logger->info( 'Migración v2.5.3: eje X DOM overrides, títulos de ejes, tooltip geomap universal.' );
         }
+
+        // v2.5.4: Regresión de barras/líneas/scatter del v2.5.3 corregida.
+        //  - applyXAxisConfig en v2.5.3 llamaba yConfig() SIEMPRE y con
+        //    `titleConfig: {fontWeight: 600}`. Esto disparaba de nuevo
+        //    el `.slice is not a function` en d3plus v2 internals para
+        //    charts verticales (bar/line/area/scatter). Ahora se vuelve
+        //    a la estructura de v2.5.1: yConfig() SÓLO para barH o
+        //    cuando hay y_title; sin titleConfig (usar defaults de d3plus).
+        //  - applyAxisDomOverrides se bypassa cuando no hay rotación ni
+        //    ocultamiento (caso por defecto) para no tocar el DOM de
+        //    gratis, y si falla queda atrapado en try/catch sin afectar
+        //    el render que ya terminó.
+        if ( version_compare( $from_version, '2.5.4', '<' ) ) {
+            $this->database->clear_chart_caches();
+            $this->logger->info( 'Migración v2.5.4: fix regresión slice error en barras/líneas.' );
+        }
     }
 
     /**
