@@ -3,7 +3,7 @@
  * Plugin Name: SGR Suite
  * Plugin URI:  https://github.com/GobernaciondeNarino/sgr-suite
  * Description: Importa, almacena, visualiza y filtra datos de proyectos del Sistema General de Regalías (SGR) de Nariño. Incluye gráficos D3Plus y personalización de cards.
- * Version:     2.5.3
+ * Version:     2.5.4
  * Requires at least: 6.0
  * Requires PHP: 8.1
  * Author:      Gobernación de Nariño
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SGR_SUITE_VERSION', '2.5.3' );
+define( 'SGR_SUITE_VERSION', '2.5.4' );
 define( 'SGR_SUITE_FILE', __FILE__ );
 define( 'SGR_SUITE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SGR_SUITE_URL', plugin_dir_url( __FILE__ ) );
