@@ -250,6 +250,7 @@
                 '#sgr-data-view, #sgr-limit, #sgr-order-dir, #sgr-chart-height, ' +
                 '#sgr-number-format, #sgr-colors, #sgr-legend-mode, ' +
                 '#sgr-x-labels-rotate, #sgr-x-labels-size, ' +
+                '#sgr-x-title, #sgr-y-title, ' +
                 'input[name="sgr_chart[chart_type]"], ' +
                 'input[name="sgr_chart[x_labels_visible]"], ' +
                 'input[name="sgr_chart[show_legend]"]',
@@ -459,6 +460,8 @@
                 x_labels_rotate:  $('#sgr-x-labels-rotate').val() || 0,
                 x_labels_size:    $('#sgr-x-labels-size').val() || 12,
                 x_labels_visible: $('input[name="sgr_chart[x_labels_visible]"]').is(':checked') ? 1 : 0,
+                x_title:          $('#sgr-x-title').val() || '',
+                y_title:          $('#sgr-y-title').val() || '',
                 show_legend:      $('input[name="sgr_chart[show_legend]"]').is(':checked') ? 1 : 0
             };
             return formData;
