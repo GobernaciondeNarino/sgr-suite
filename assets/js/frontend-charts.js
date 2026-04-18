@@ -811,12 +811,6 @@
                         // shapeConfig. El tooltip nativo de d3plus sólo
                         // dispara en features con data-match — así no hay
                         // confusión con "sin contratos".
-                        // Crear un set de IDs con datos para el post-render.
-                        var dataIds = {};
-                        data.forEach(function (d) {
-                            if (d && d.id != null) dataIds[String(d.id)] = true;
-                        });
-
                         chart = new d3p.Geomap()
                             .select(selector)
                             .data(data)
@@ -905,47 +899,6 @@
             applyXAxisConfig(chart, chartType, config);
 
             chart.render();
-
-            // Post-render: pintar polígonos sin datos con #FFFCF3 en
-            // geomap. No se puede hacer con shapeConfig.Path.fill porque
-            // eso SOBRESCRIBE el colorScale para todos los features.
-            // Se hace por DOM después del render: d3plus coloca
-            // atributos data-* en cada <path> que nos permiten
-            // identificar cuáles tienen data-match.
-            if (chartType === 'geomap' && typeof dataIds === 'object') {
-                [300, 800].forEach(function (delay) {
-                    setTimeout(function () {
-                        try {
-                            var svg = container.querySelector('svg');
-                            if (!svg) return;
-                            var paths = svg.querySelectorAll('path');
-                            Array.prototype.forEach.call(paths, function (p) {
-                                // d3plus Geomap no pone data-id, pero los
-                                // features con data-match reciben fill del
-                                // colorScale (un azul). Los sin match
-                                // mantienen el fill default de d3plus (gris
-                                // claro ~#f5f5f3). Sobrescribimos todo lo
-                                // que NO sea un color del gradiente azul.
-                                var fill = (p.getAttribute('fill') || '').toLowerCase();
-                                var isBlue = /^#[0-9a-f]{6}$/.test(fill) && fill !== '#fffcf3';
-                                var r = parseInt(fill.slice(1, 3), 16) || 0;
-                                var g = parseInt(fill.slice(3, 5), 16) || 0;
-                                var b = parseInt(fill.slice(5, 7), 16) || 0;
-                                // El gradiente azul tiene b > r y b > 120.
-                                // Los defaults grises tienen r ≈ g ≈ b > 200.
-                                var isDataColored = b > r && b > 120;
-                                if (!isDataColored && fill !== '#fffcf3') {
-                                    p.setAttribute('fill', '#FFFCF3');
-                                    p.setAttribute('stroke', '#cbd5e1');
-                                    p.setAttribute('stroke-width', '0.6');
-                                }
-                            });
-                        } catch (err) {
-                            if (window.console) console.warn('SGR geomap post-render:', err);
-                        }
-                    }, delay);
-                });
-            }
 
             // Post-procesamiento DOM de los ejes: rotación forzada y
             // ocultamiento real de las etiquetas de tick.
