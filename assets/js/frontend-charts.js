@@ -795,18 +795,22 @@
                             }
                         });
 
-                        // Paleta secuencial por defecto. El primer color
-                        // (#FFFCF3 crema claro) cubre los municipios sin
-                        // datos (value=0): así no se mezclan visualmente
-                        // con los que sí tienen inversión/contratos.
+                        // Paleta secuencial por defecto (sin #FFFCF3 — los
+                        // municipios sin datos no se incluyen en la data,
+                        // se pintan con el fill por defecto más abajo).
                         var geomapPalette = (config.colors && config.colors.length >= 3)
                             ? config.colors
-                            : ['#FFFCF3', '#bfdbfe', '#60a5fa', '#2563eb', '#1e3a8a'];
+                            : ['#bfdbfe', '#60a5fa', '#2563eb', '#1e3a8a'];
 
                         // Construcción defensiva: algunos métodos (fitFilter,
                         // topojsonId, ocean, tiles) pueden no estar expuestos
                         // en todas las variantes del bundle. Se aplican con
                         // detección de tipo para no romper la cadena.
+                        // v2.5.6: sólo se pasan filas con datos reales.
+                        // Los polígonos sin data reciben fill #FFFCF3 vía
+                        // shapeConfig. El tooltip nativo de d3plus sólo
+                        // dispara en features con data-match — así no hay
+                        // confusión con "sin contratos".
                         chart = new d3p.Geomap()
                             .select(selector)
                             .data(data)
@@ -818,51 +822,26 @@
                                     tickFormat: function (n) {
                                         return formatNumber(n, numFormat);
                                     }
-                                },
-                                legendConfig: {
-                                    shapeConfig: {
-                                        labelConfig: { fontSize: 11 }
-                                    }
                                 }
                             })
                             .colorScalePosition('bottom')
-                            .topojson(topoUrl);
-
-                        if (typeof chart.topojsonId === 'function') {
-                            // Por defecto d3plus usa feature.id; lo declaramos
-                            // explícitamente igual para mayor claridad.
-                            chart.topojsonId('id');
-                        }
-                        if (typeof chart.tiles === 'function') {
-                            chart.tiles(true);
-                        }
-                        if (typeof chart.ocean === 'function') {
-                            chart.ocean('transparent');
-                        }
-                        if (typeof chart.fitFilter === 'function') {
-                            // Encuadre sólo por features con DIVIPOLA 52xxx (todos
-                            // los nuestros) — útil si algún día añadimos más departamentos.
-                            chart.fitFilter(function (d) {
-                                var fid = d && d.id != null ? String(d.id) : '';
-                                return fid.length === 5 && fid.substring(0, 2) === '52';
-                            });
-                        }
-
-                        chart.tooltipConfig({
+                            .shapeConfig({
+                                Path: {
+                                    // Fill por defecto para polígonos SIN
+                                    // data-match (los 51 municipios sin
+                                    // contratos). d3plus sobrescribe con el
+                                    // colorScale para los que SÍ matchean.
+                                    fill: '#FFFCF3',
+                                    stroke: '#cbd5e1',
+                                    strokeWidth: 0.6
+                                }
+                            })
+                            .tooltipConfig({
                                 title: function (d) {
                                     return d && d.label ? String(d.label) : '';
                                 },
                                 body: function (d) {
-                                    if (!d) return '<em>Sin datos</em>';
-
-                                    // v2.5.3: los polígonos de municipios sin
-                                    // contratos ahora también reciben una fila
-                                    // de data (con no_data=true) para que el
-                                    // tooltip dispare en todo Nariño.
-                                    if (d.no_data) {
-                                        return '<em>Sin contratos registrados en este municipio.</em>';
-                                    }
-
+                                    if (!d) return '';
                                     var metric  = (config.data_view && config.data_view.indexOf('contratos') !== -1)
                                         ? 'Contratos'
                                         : 'Valor';
@@ -877,17 +856,34 @@
                                         lines.push('<strong>Valor total:</strong> ' + formatNumber(d.valor_total, numFormat));
                                     }
                                     if (d.poblacion != null && d.poblacion > 0) {
-                                        lines.push('<strong>Población beneficiada:</strong> ' + formatNumber(d.poblacion, 'colombiano'));
+                                        lines.push('<strong>Población:</strong> ' + formatNumber(d.poblacion, 'colombiano'));
                                     }
                                     if (d.avance_promedio != null && d.avance_promedio > 0) {
-                                        lines.push('<strong>Avance promedio:</strong> ' + d.avance_promedio + '%');
+                                        lines.push('<strong>Avance:</strong> ' + d.avance_promedio + '%');
                                     }
                                     if (d.dependencias && d.dependencias.length) {
-                                        lines.push('<strong>Dependencias:</strong> ' + d.dependencias.join(', '));
+                                        lines.push('<strong>Dep.:</strong> ' + d.dependencias.join(', '));
                                     }
-                                    return lines.length ? lines.join('<br/>') : '<em>Sin contratos registrados.</em>';
+                                    return lines.join('<br/>');
                                 }
+                            })
+                            .topojson(topoUrl);
+
+                        if (typeof chart.topojsonId === 'function') {
+                            chart.topojsonId('id');
+                        }
+                        if (typeof chart.tiles === 'function') {
+                            chart.tiles(true);
+                        }
+                        if (typeof chart.ocean === 'function') {
+                            chart.ocean('transparent');
+                        }
+                        if (typeof chart.fitFilter === 'function') {
+                            chart.fitFilter(function (d) {
+                                var fid = d && d.id != null ? String(d.id) : '';
+                                return fid.length === 5 && fid.substring(0, 2) === '52';
                             });
+                        }
                         break;
 
                     default:

@@ -239,14 +239,37 @@ class SGR_Suite_Database {
     /**
      * Limpiar todas las caches de gráficos.
      */
+    /**
+     * Limpiar caches de todos los gráficos publicados.
+     *
+     * Se ejecuta automáticamente tras cada importación de datos y en
+     * las migraciones del updater. Elimina los transients que almacenan
+     * los datos pre-computados de cada gráfico para que la próxima
+     * solicitud frontend/admin los re-genere con datos frescos.
+     *
+     * También limpia los transients de rate-limiting para evitar
+     * que un usuario quede bloqueado justo después de un re-import.
+     */
     public function clear_chart_caches(): void {
         global $wpdb;
+
+        // Limpiar datos cacheados de cada gráfico (incluye drafts y
+        // trash para cubrir todos los posibles transients residuales).
         $chart_ids = $wpdb->get_col(
-            "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'sgr_chart' AND post_status = 'publish'"
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'sgr_chart'"
         );
         foreach ( $chart_ids as $cid ) {
             delete_transient( 'sgr_chart_data_' . $cid );
         }
+
+        // Limpiar rate-limit transients (patrón sgr_rate_*).
+        $wpdb->query(
+            "DELETE FROM {$wpdb->options}
+             WHERE option_name LIKE '\_transient\_sgr\_rate\_%'
+                OR option_name LIKE '\_transient\_timeout\_sgr\_rate\_%'"
+        );
+
+        $this->logger->info( 'Caches de gráficos limpiados: ' . count( $chart_ids ) . ' gráficos.' );
     }
 
     /**
@@ -1044,52 +1067,21 @@ class SGR_Suite_Database {
             $entry['avance_promedio'] = $avance_avg;
             $entry['dependencias']    = array_keys( $entry['dependencias'] );
             $entry['value']           = 'valor' === $metric ? (float) $entry['valor_total'] : (int) $entry['contratos'];
-            $entry['no_data']         = false;
             unset( $entry['avance_sum'], $entry['avance_n'], $entry['_contratos'] );
             $out[] = $entry;
         }
 
-        // v2.5.3: pre-rellenar municipios sin contratos con value = 0
-        // para que TODOS los 64 polígonos del topojson tengan una fila
-        // de data y d3plus-geomap dispare el tooltip al pasar el cursor
-        // sobre cualquiera (antes sólo había tooltip en los ~13 con
-        // datos reales). Los rellenos llevan `no_data: true` para que
-        // el frontend muestre "Sin contratos registrados" en su tooltip.
-        if ( class_exists( 'SGR_Suite_Municipios_Normalizer' ) ) {
-            $all_munis = SGR_Suite_Municipios_Normalizer::all();
-            foreach ( $all_munis as $muni ) {
-                $divipola = $muni['divipola'];
-                if ( isset( $agg[ $divipola ] ) ) {
-                    continue;
-                }
-                $out[] = [
-                    'id'              => $divipola,
-                    'label'           => $muni['nombre'],
-                    'value'           => 0,
-                    'valor_total'     => 0,
-                    'contratos'       => 0,
-                    'poblacion'       => 0,
-                    'avance_promedio' => 0,
-                    'dependencias'    => [],
-                    'no_data'         => true,
-                ];
-            }
-        }
+        // v2.5.6: NO pre-rellenar municipios sin datos. El topojson
+        // dibuja los 64 polígonos, pero sólo los que tienen data real
+        // reciben color del colorScale y tooltip. Los demás se pintan
+        // con el fill por defecto (#FFFCF3 — configurado en JS). Esto
+        // evita confusión con tooltips "sin datos" y hace que d3plus use
+        // su tooltip nativo sin interferencia.
 
-        // Ordenar por value desc (los de data primero) y luego por
-        // nombre para los sin-data.
+        // Ordenar por value.
         usort(
             $out,
             static function ( $a, $b ) use ( $order_dir ) {
-                $na = ! empty( $a['no_data'] );
-                $nb = ! empty( $b['no_data'] );
-                // Los sin-data van al final sin importar el order_dir.
-                if ( $na !== $nb ) {
-                    return $na ? 1 : -1;
-                }
-                if ( $na && $nb ) {
-                    return strcmp( $a['label'] ?? '', $b['label'] ?? '' );
-                }
                 $va = (float) ( $a['value'] ?? 0 );
                 $vb = (float) ( $b['value'] ?? 0 );
                 if ( $va === $vb ) {
@@ -1102,11 +1094,7 @@ class SGR_Suite_Database {
             }
         );
 
-        // Para geomap devolvemos siempre los 64 (los polígonos existen
-        // todos); `limit` se aplica sólo a los con datos para evitar
-        // truncar el mapa. El tope duro de 64 protege contra inputs
-        // maliciosos.
-        $hard_cap = 64;
+        $hard_cap = max( 1, min( $limit, 64 ) );
         return array_slice( $out, 0, $hard_cap );
     }
 }
