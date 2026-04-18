@@ -71,8 +71,18 @@
         // ausencia de `count` (si la vista ya tiene count es que value es
         // una métrica distinta).
         var viewKey = (config && config.data_view) || '';
-        var isCount = /^(?:proyectos_por_|contratos_por_|metas_por_|top_proyectos_(?:contratos|metas)|ranking_|proyectos_vigencia|proyectos_dependencia|matrix_municipio|distribucion_|avance_fisico_por_contrato|avance_por_(?:dependencia_promedio|entidad))/.test(viewKey);
+        // Vistas donde el value principal es una cantidad (no un valor
+        // monetario): el label del tooltip muestra "Cantidad" en vez de
+        // "Valor" y se omite la participación % (no tiene sentido
+        // porcentualizar individuos o avance).
+        var isCount = /^(?:contratos_por_|proyectos_vigencia|proyectos_dependencia|matrix_municipio|distribucion_|avance_por_entidad)/.test(viewKey);
         var valueLabel = isCount && !('valor_total' in (data[0] || {})) ? 'Cantidad' : 'Valor';
+
+        // Para poblacion_por_municipio el valor ES el número de
+        // beneficiados: mostramos "Población beneficiada" y omitimos
+        // la participación % (es más impactante el absoluto).
+        var isPoblacion = /^poblacion_/.test(viewKey);
+        if (isPoblacion) valueLabel = 'Población beneficiada';
 
         // Para avance: añadir % al valor principal.
         var isAvance = /avance/.test(viewKey);
@@ -133,7 +143,7 @@
                 // Participación % (sólo para vistas sin series donde sumar
                 // tiene sentido — en stacked/grouped el 'total' suele
                 // mezclar categorías distintas).
-                if (!hasSeries && total > 0 && !isNaN(val) && !isAvance) {
+                if (!hasSeries && total > 0 && !isNaN(val) && !isAvance && !isPoblacion && !isCount) {
                     var pct = (Math.abs(val) / total * 100).toFixed(1);
                     lines.push('<strong>Participación:</strong> ' + pct + '%');
                 }
@@ -785,10 +795,13 @@
                             }
                         });
 
-                        // Paleta secuencial por defecto si no se configuró una.
+                        // Paleta secuencial por defecto. El primer color
+                        // (#FFFCF3 crema claro) cubre los municipios sin
+                        // datos (value=0): así no se mezclan visualmente
+                        // con los que sí tienen inversión/contratos.
                         var geomapPalette = (config.colors && config.colors.length >= 3)
                             ? config.colors
-                            : ['#eff6ff', '#bfdbfe', '#60a5fa', '#2563eb', '#1e3a8a'];
+                            : ['#FFFCF3', '#bfdbfe', '#60a5fa', '#2563eb', '#1e3a8a'];
 
                         // Construcción defensiva: algunos métodos (fitFilter,
                         // topojsonId, ocean, tiles) pueden no estar expuestos
@@ -801,21 +814,11 @@
                             .colorScale('value')
                             .colorScaleConfig({
                                 color: geomapPalette,
-                                // Formateador del eje del gradiente (los
-                                // números que aparecen debajo de la leyenda).
-                                // `axisConfig.tickFormat` es el punto correcto:
-                                // recibe un número real. `legendConfig.label`
-                                // recibía un shape-object y truncaba a 0.
                                 axisConfig: {
                                     tickFormat: function (n) {
                                         return formatNumber(n, numFormat);
                                     }
                                 },
-                                // Las etiquetas de los rangos se las dejamos
-                                // a d3plus (auto-calcula bucket labels con
-                                // base a los cortes de la escala cuantil).
-                                // Ajustamos sólo el tamaño para que entren
-                                // bien en la franja inferior.
                                 legendConfig: {
                                     shapeConfig: {
                                         labelConfig: { fontSize: 11 }

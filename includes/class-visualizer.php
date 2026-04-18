@@ -457,154 +457,44 @@ class SGR_Suite_Visualizer {
             // =============================================================
             // TOTALES Y AGREGADOS
             // =============================================================
-            'valor_por_dependencia' => [
-                'category' => 'totales',
-                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
-            ],
-            'proyectos_por_dependencia' => [
-                'category' => 'totales',
-                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
-            ],
-            'valor_por_entidad' => [
-                'category' => 'totales',
-                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
-            ],
-            'proyectos_por_entidad' => [
-                'category' => 'totales',
-                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
-            ],
-            'metas_por_dependencia' => [
-                'category' => 'totales',
-                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
-            ],
-            'contratos_por_dependencia' => [
-                'category' => 'totales',
-                'charts'   => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
-            ],
-            'valor_por_municipio' => [
-                'category' => 'totales',
-                'charts'   => [ 'bar', 'barH', 'treemap', 'pack' ],
-            ],
-            'poblacion_por_municipio' => [
-                'category' => 'totales',
-                'charts'   => [ 'bar', 'barH', 'treemap', 'pack' ],
-            ],
+            'valor_por_dependencia'        => [ 'category' => 'totales',      'charts' => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ] ],
+            'valor_por_entidad'            => [ 'category' => 'totales',      'charts' => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ] ],
+            'valor_por_municipio'          => [ 'category' => 'totales',      'charts' => [ 'bar', 'barH', 'treemap', 'pack' ] ],
+            'poblacion_por_municipio'      => [ 'category' => 'totales',      'charts' => [ 'bar', 'barH', 'treemap', 'pack' ] ],
+            'contratos_por_dependencia'    => [ 'category' => 'totales',      'charts' => [ 'bar', 'barH', 'pie', 'donut', 'treemap', 'pack' ] ],
 
             // =============================================================
-            // RANKINGS / TOP N
+            // DISTRIBUCIÓN / CATEGORÍAS
             // =============================================================
-            'top_proyectos_valor' => [
-                'category' => 'rankings',
-                'charts'   => [ 'barH', 'bar', 'treemap', 'pack' ],
-            ],
-            'top_proyectos_contratos' => [
-                'category' => 'rankings',
-                'charts'   => [ 'barH', 'bar', 'treemap', 'pack' ],
-            ],
-            'top_proyectos_metas' => [
-                'category' => 'rankings',
-                'charts'   => [ 'barH', 'bar', 'treemap', 'pack' ],
-            ],
-
-            // =============================================================
-            // DISTRIBUCIÓN / BUCKETS
-            // =============================================================
-            'distribucion_proyectos_con_sin_contrato' => [
-                'category' => 'distribucion',
-                'charts'   => [ 'pie', 'donut', 'bar', 'barH' ],
-            ],
-            'distribucion_proyectos_con_sin_metas' => [
-                'category' => 'distribucion',
-                'charts'   => [ 'pie', 'donut', 'bar', 'barH' ],
-            ],
-            'distribucion_riesgo_contratos' => [
-                'category' => 'distribucion',
-                'charts'   => [ 'pie', 'donut', 'bar', 'barH' ],
-            ],
+            'distribucion_riesgo_contratos' => [ 'category' => 'distribucion', 'charts' => [ 'pie', 'donut', 'bar', 'barH' ] ],
 
             // =============================================================
             // AVANCE FÍSICO
             // =============================================================
-            'avance_fisico_por_contrato' => [
-                'category' => 'avance',
-                'charts'   => [ 'barH', 'bar' ],
-            ],
-            'avance_por_dependencia_promedio' => [
-                'category' => 'avance',
-                'charts'   => [ 'bar', 'barH' ],
-            ],
-            'avance_por_entidad' => [
-                'category' => 'avance',
-                'charts'   => [ 'bar', 'barH' ],
-            ],
-            'scatter_valor_avance' => [
-                'category' => 'avance',
-                'charts'   => [ 'scatter' ],
-            ],
+            'scatter_valor_avance'         => [ 'category' => 'avance',       'charts' => [ 'scatter' ] ],
+            'avance_por_entidad'           => [ 'category' => 'avance',       'charts' => [ 'bar', 'barH' ] ],
 
             // =============================================================
-            // CRUCES CON SERIES (stacked / grouped)
+            // CRUCES CON SERIES
             // =============================================================
-            'valor_dependencia_x_entidad' => [
-                'category' => 'series',
-                'charts'   => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH', 'treemap' ],
-            ],
-            'proyectos_dependencia_x_entidad' => [
-                'category' => 'series',
-                'charts'   => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH' ],
-            ],
-            'proyectos_vs_contratos_x_dependencia' => [
-                'category' => 'series',
-                'charts'   => [ 'grouped_bar', 'stacked_bar', 'bar', 'barH' ],
-            ],
-            'metas_vs_contratos_x_dependencia' => [
-                'category' => 'series',
-                'charts'   => [ 'grouped_bar', 'stacked_bar', 'bar', 'barH' ],
-            ],
-            'valor_municipio_x_dependencia' => [
-                'category' => 'series',
-                'charts'   => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH' ],
-            ],
-            'valor_entidad_x_dependencia' => [
-                'category' => 'series',
-                'charts'   => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH' ],
-            ],
-            'matrix_municipio_dependencia' => [
-                'category' => 'series',
-                'charts'   => [ 'stacked_bar', 'grouped_bar', 'treemap' ],
-            ],
+            'valor_dependencia_x_entidad'     => [ 'category' => 'series', 'charts' => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH', 'treemap' ] ],
+            'proyectos_dependencia_x_entidad' => [ 'category' => 'series', 'charts' => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH' ] ],
+            'valor_municipio_x_dependencia'   => [ 'category' => 'series', 'charts' => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH' ] ],
+            'valor_entidad_x_dependencia'     => [ 'category' => 'series', 'charts' => [ 'stacked_bar', 'grouped_bar', 'bar', 'barH' ] ],
+            'matrix_municipio_dependencia'    => [ 'category' => 'series', 'charts' => [ 'stacked_bar', 'grouped_bar', 'treemap' ] ],
 
             // =============================================================
             // TEMPORAL / VIGENCIAS
             // =============================================================
-            'vigencia_valor' => [
-                'category' => 'temporal',
-                'charts'   => [ 'bar', 'line', 'area', 'barH', 'pie', 'donut', 'treemap', 'pack' ],
-            ],
-            'vigencia_dependencia_x' => [
-                'category' => 'temporal',
-                'charts'   => [ 'stacked_bar', 'grouped_bar', 'area', 'line', 'bar' ],
-            ],
-            'proyectos_vigencia_x_dependencia' => [
-                'category' => 'temporal',
-                'charts'   => [ 'grouped_bar', 'stacked_bar', 'line', 'area', 'bar' ],
-            ],
-            'ranking_dependencias_vigencia' => [
-                'category' => 'temporal',
-                'charts'   => [ 'line', 'area', 'grouped_bar', 'stacked_bar', 'bar' ],
-            ],
+            'vigencia_valor'                   => [ 'category' => 'temporal', 'charts' => [ 'bar', 'line', 'area', 'barH', 'pie', 'donut', 'treemap', 'pack' ] ],
+            'vigencia_dependencia_x'           => [ 'category' => 'temporal', 'charts' => [ 'stacked_bar', 'grouped_bar', 'area', 'line', 'bar' ] ],
+            'proyectos_vigencia_x_dependencia' => [ 'category' => 'temporal', 'charts' => [ 'grouped_bar', 'stacked_bar', 'line', 'area', 'bar' ] ],
 
             // =============================================================
             // GEOGRÁFICO
             // =============================================================
-            'geomap_valor_municipio' => [
-                'category' => 'geografico',
-                'charts'   => [ 'geomap' ],
-            ],
-            'geomap_contratos_municipio' => [
-                'category' => 'geografico',
-                'charts'   => [ 'geomap' ],
-            ],
+            'geomap_valor_municipio'     => [ 'category' => 'geografico', 'charts' => [ 'geomap' ] ],
+            'geomap_contratos_municipio' => [ 'category' => 'geografico', 'charts' => [ 'geomap' ] ],
         ];
     }
 
@@ -617,7 +507,6 @@ class SGR_Suite_Visualizer {
     public function get_view_categories(): array {
         return [
             'totales'      => esc_html__( 'Totales y Agregados', 'sgr-suite' ),
-            'rankings'     => esc_html__( 'Rankings / Top N', 'sgr-suite' ),
             'distribucion' => esc_html__( 'Distribución / Categorías', 'sgr-suite' ),
             'avance'       => esc_html__( 'Avance Físico', 'sgr-suite' ),
             'series'       => esc_html__( 'Cruces con Series', 'sgr-suite' ),

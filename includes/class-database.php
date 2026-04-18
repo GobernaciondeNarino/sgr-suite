@@ -635,7 +635,7 @@ class SGR_Suite_Database {
 
         return [
             // =====================================================================
-            // VISTAS SIMPLES (label + value)
+            // TOTALES Y AGREGADOS
             // =====================================================================
 
             'valor_por_dependencia' => [
@@ -649,14 +649,6 @@ class SGR_Suite_Database {
                               GROUP BY dependencia_proyecto",
                 'columns' => [ 'label', 'value', 'count', 'valor_promedio' ],
             ],
-            'proyectos_por_dependencia' => [
-                'label'   => 'Cantidad de Proyectos por Dependencia',
-                'sql'     => "SELECT dependencia_proyecto AS label, COUNT(*) AS value
-                              FROM {$this->table('proyectos')}
-                              WHERE dependencia_proyecto != ''
-                              GROUP BY dependencia_proyecto",
-                'columns' => [ 'label', 'value' ],
-            ],
             'valor_por_entidad' => [
                 'label'   => 'Inversión por Entidad Ejecutora (Departamento, Municipio, Otro)',
                 'sql'     => "SELECT {$entidad_norm} AS label,
@@ -666,47 +658,6 @@ class SGR_Suite_Database {
                               FROM {$this->table('proyectos')} p
                               GROUP BY {$entidad_norm}",
                 'columns' => [ 'label', 'value', 'count', 'valor_promedio' ],
-            ],
-            'proyectos_por_entidad' => [
-                'label'   => 'Cantidad de Proyectos por Entidad Ejecutora',
-                'sql'     => "SELECT {$entidad_norm} AS label, COUNT(*) AS value
-                              FROM {$this->table('proyectos')} p
-                              GROUP BY {$entidad_norm}",
-                'columns' => [ 'label', 'value' ],
-            ],
-            'top_proyectos_valor' => [
-                'label'   => 'Top Proyectos por Valor (Mayor inversión)',
-                'sql'     => "SELECT CONCAT(numero_proyecto, ' - ', LEFT(nombre_proyecto, 50)) AS label, valor_proyecto AS value
-                              FROM {$this->table('proyectos')}
-                              WHERE valor_proyecto > 0
-                              ORDER BY valor_proyecto DESC",
-                'columns' => [ 'label', 'value' ],
-            ],
-            'top_proyectos_contratos' => [
-                'label'   => 'Top Proyectos por Cantidad de Contratos',
-                'sql'     => "SELECT CONCAT(numero_proyecto, ' - ', LEFT(nombre_proyecto, 50)) AS label, total_contratos AS value
-                              FROM {$this->table('proyectos')}
-                              WHERE total_contratos > 0
-                              ORDER BY total_contratos DESC",
-                'columns' => [ 'label', 'value' ],
-            ],
-            'top_proyectos_metas' => [
-                'label'   => 'Top Proyectos por Cantidad de Metas',
-                'sql'     => "SELECT CONCAT(p.numero_proyecto, ' - ', LEFT(p.nombre_proyecto, 50)) AS label, COUNT(mt.id) AS value
-                              FROM {$this->table('proyectos')} p
-                              INNER JOIN {$this->table('metas')} mt ON mt.proyecto_id = p.id
-                              GROUP BY p.id, p.numero_proyecto, p.nombre_proyecto
-                              ORDER BY value DESC",
-                'columns' => [ 'label', 'value' ],
-            ],
-            'metas_por_dependencia' => [
-                'label'   => 'Metas por Dependencia',
-                'sql'     => "SELECT p.dependencia_proyecto AS label, COUNT(mt.id) AS value
-                              FROM {$this->table('metas')} mt
-                              INNER JOIN {$this->table('proyectos')} p ON mt.proyecto_id = p.id
-                              WHERE p.dependencia_proyecto != ''
-                              GROUP BY p.dependencia_proyecto",
-                'columns' => [ 'label', 'value' ],
             ],
             'valor_por_municipio' => [
                 'label'   => 'Inversión por Municipio',
@@ -718,10 +669,13 @@ class SGR_Suite_Database {
             ],
             'poblacion_por_municipio' => [
                 'label'   => 'Población Beneficiada por Municipio',
-                'sql'     => "SELECT m.nombre AS label, SUM(m.poblacion_beneficiada) AS value
+                'sql'     => "SELECT m.nombre AS label,
+                                     SUM(m.poblacion_beneficiada) AS value,
+                                     COUNT(DISTINCT c.id) AS count
                               FROM {$this->table('municipios')} m
+                              INNER JOIN {$this->table('contratos')} c ON m.contrato_id = c.id
                               GROUP BY m.nombre",
-                'columns' => [ 'label', 'value' ],
+                'columns' => [ 'label', 'value', 'count' ],
             ],
             'contratos_por_dependencia' => [
                 'label'   => 'Contratos por Dependencia',
@@ -732,34 +686,63 @@ class SGR_Suite_Database {
                               GROUP BY p.dependencia_proyecto",
                 'columns' => [ 'label', 'value', 'total_valor' ],
             ],
-            'avance_fisico_por_contrato' => [
-                'label'   => 'Avance Físico por Contrato',
-                'sql'     => "SELECT CONCAT('Contrato ', c.numero_contrato) AS label, c.porcentaje_avance_fisico AS value
+
+            // =====================================================================
+            // DISTRIBUCIÓN / CATEGORÍAS
+            // =====================================================================
+
+            'distribucion_riesgo_contratos' => [
+                'label'   => 'V-08b · Distribución de Riesgo de Contratos (Pie/Donut)',
+                'sql'     => "SELECT
+                                CASE
+                                    WHEN c.porcentaje_avance_fisico >= 50 THEN 'Riesgo bajo'
+                                    WHEN c.porcentaje_avance_fisico >= 10 THEN 'Riesgo medio'
+                                    ELSE 'Riesgo alto'
+                                END AS label,
+                                COUNT(*) AS value,
+                                SUM(c.valor_contrato) AS total_valor
                               FROM {$this->table('contratos')} c
-                              WHERE c.porcentaje_avance_fisico > 0
-                              ORDER BY c.porcentaje_avance_fisico DESC",
-                'columns' => [ 'label', 'value' ],
-            ],
-            'distribucion_proyectos_con_sin_contrato' => [
-                'label'   => 'Proyectos: Con vs Sin Contratos (Pie/Donut)',
-                'sql'     => "SELECT CASE WHEN total_contratos > 0 THEN 'Con Contratos' ELSE 'Sin Contratos' END AS label,
-                                     COUNT(*) AS value
-                              FROM {$this->table('proyectos')}
+                              WHERE c.valor_contrato > 0
                               GROUP BY label",
-                'columns' => [ 'label', 'value' ],
-            ],
-            'distribucion_proyectos_con_sin_metas' => [
-                'label'   => 'Proyectos: Con vs Sin Metas (Pie/Donut)',
-                'sql'     => "SELECT sub.label, COUNT(*) AS value FROM (
-                                SELECT CASE WHEN (SELECT COUNT(*) FROM {$this->table('metas')} mt WHERE mt.proyecto_id = p.id) > 0
-                                       THEN 'Con Metas' ELSE 'Sin Metas' END AS label
-                                FROM {$this->table('proyectos')} p
-                              ) sub GROUP BY sub.label",
-                'columns' => [ 'label', 'value' ],
+                'columns' => [ 'label', 'value', 'total_valor' ],
             ],
 
             // =====================================================================
-            // VISTAS CON SERIES (para barras apiladas/agrupadas)
+            // AVANCE FÍSICO
+            // =====================================================================
+
+            'scatter_valor_avance' => [
+                'label'   => 'V-08 · Scatter: Valor Contrato vs Avance Físico por Municipio',
+                'sql'     => "SELECT
+                                COALESCE(m.nombre, CONCAT('Contrato ', c.numero_contrato)) AS label,
+                                p.dependencia_proyecto AS series,
+                                c.valor_contrato AS x,
+                                c.porcentaje_avance_fisico AS y,
+                                c.valor_contrato AS value
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              LEFT JOIN {$this->table('municipios')} m ON m.contrato_id = c.id
+                              WHERE c.valor_contrato > 0
+                                AND p.dependencia_proyecto != ''",
+                'columns' => [ 'label', 'series', 'x', 'y', 'value' ],
+            ],
+
+            'avance_por_entidad' => [
+                'label'   => 'V-19 · Avance Físico por Entidad Ejecutora (Distribución)',
+                'sql'     => "SELECT
+                                {$entidad_norm} AS label,
+                                {$entidad_norm} AS series,
+                                c.porcentaje_avance_fisico AS value,
+                                c.numero_contrato AS detalle,
+                                c.valor_contrato AS total_valor
+                              FROM {$this->table('contratos')} c
+                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                              WHERE c.porcentaje_avance_fisico IS NOT NULL",
+                'columns' => [ 'label', 'series', 'value', 'detalle', 'total_valor' ],
+            ],
+
+            // =====================================================================
+            // CRUCES CON SERIES (barras apiladas/agrupadas)
             // =====================================================================
 
             'valor_dependencia_x_entidad' => [
@@ -781,39 +764,6 @@ class SGR_Suite_Database {
                               FROM {$this->table('proyectos')} p
                               WHERE p.dependencia_proyecto != ''
                               GROUP BY p.dependencia_proyecto, {$entidad_norm}",
-                'columns' => [ 'label', 'series', 'value' ],
-            ],
-            'proyectos_vs_contratos_x_dependencia' => [
-                'label'   => 'Proyectos vs Contratos por Dependencia (Agrupadas)',
-                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
-                                SELECT p.dependencia_proyecto AS label, 'Proyectos' AS series, COUNT(DISTINCT p.id) AS value
-                                FROM {$this->table('proyectos')} p
-                                WHERE p.dependencia_proyecto != ''
-                                GROUP BY p.dependencia_proyecto
-                                UNION ALL
-                                SELECT p.dependencia_proyecto AS label, 'Contratos' AS series, COUNT(c.id) AS value
-                                FROM {$this->table('contratos')} c
-                                INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
-                                WHERE p.dependencia_proyecto != ''
-                                GROUP BY p.dependencia_proyecto
-                              ) sub",
-                'columns' => [ 'label', 'series', 'value' ],
-            ],
-            'metas_vs_contratos_x_dependencia' => [
-                'label'   => 'Metas vs Contratos por Dependencia (Agrupadas)',
-                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
-                                SELECT p.dependencia_proyecto AS label, 'Metas' AS series, COUNT(mt.id) AS value
-                                FROM {$this->table('metas')} mt
-                                INNER JOIN {$this->table('proyectos')} p ON mt.proyecto_id = p.id
-                                WHERE p.dependencia_proyecto != ''
-                                GROUP BY p.dependencia_proyecto
-                                UNION ALL
-                                SELECT p.dependencia_proyecto AS label, 'Contratos' AS series, COUNT(c.id) AS value
-                                FROM {$this->table('contratos')} c
-                                INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
-                                WHERE p.dependencia_proyecto != ''
-                                GROUP BY p.dependencia_proyecto
-                              ) sub",
                 'columns' => [ 'label', 'series', 'value' ],
             ],
             'valor_municipio_x_dependencia' => [
@@ -841,136 +791,51 @@ class SGR_Suite_Database {
             ],
 
             // =====================================================================
-            // VISTAS DE VIGENCIA (sgr_views.md V-04, V-05, V-15)
+            // TEMPORAL / VIGENCIAS (V-04, V-05, V-05b)
             //
-            // La vigencia se deriva del prefijo BPIN numérico cuando existe; los
-            // proyectos IDSN/Infra sin año explícito se agrupan con etiquetas
-            // propias ('IDSN*', 'Infra*') para mantener la serie interpretable.
+            // v2.5.5: el label ahora muestra SÓLO fechas numéricas
+            // (2023, 2024, 2025, 2026). Los proyectos sin año-prefijo
+            // (IDSN*, Infra*...) se excluyen via WHERE REGEXP para que
+            // el eje X sea estrictamente cronológico.
             // =====================================================================
 
             'vigencia_valor' => [
-                'label'   => 'V-04 · Inversión por Vigencia (BPIN año)',
+                'label'   => 'V-04 · Inversión por Vigencia',
                 'sql'     => "SELECT
-                                {$vigencia_norm} AS label,
+                                SUBSTRING(p.numero_proyecto, 1, 4) AS label,
                                 SUM(p.valor_proyecto) AS value,
                                 COUNT(*) AS count,
                                 ROUND(AVG(p.valor_proyecto), 2) AS valor_promedio
                               FROM {$this->table('proyectos')} p
-                              GROUP BY label",
+                              WHERE p.numero_proyecto REGEXP '^(20|19)[0-9]{2}'
+                              GROUP BY SUBSTRING(p.numero_proyecto, 1, 4)",
                 'columns' => [ 'label', 'value', 'count', 'valor_promedio' ],
             ],
 
             'vigencia_dependencia_x' => [
                 'label'   => 'V-05 · Inversión: Vigencia x Dependencia (Apiladas)',
-                'sql'     => "SELECT sub.label, sub.series, sub.value, sub.count FROM (
-                                SELECT
-                                    {$vigencia_norm} AS label,
-                                    p.dependencia_proyecto AS series,
-                                    SUM(p.valor_proyecto) AS value,
-                                    COUNT(*) AS count
-                                FROM {$this->table('proyectos')} p
-                                WHERE p.dependencia_proyecto != ''
-                                GROUP BY label, p.dependencia_proyecto
-                              ) sub",
+                'sql'     => "SELECT
+                                SUBSTRING(p.numero_proyecto, 1, 4) AS label,
+                                p.dependencia_proyecto AS series,
+                                SUM(p.valor_proyecto) AS value,
+                                COUNT(*) AS count
+                              FROM {$this->table('proyectos')} p
+                              WHERE p.dependencia_proyecto != ''
+                                AND p.numero_proyecto REGEXP '^(20|19)[0-9]{2}'
+                              GROUP BY SUBSTRING(p.numero_proyecto, 1, 4), p.dependencia_proyecto",
                 'columns' => [ 'label', 'series', 'value', 'count' ],
             ],
 
             'proyectos_vigencia_x_dependencia' => [
                 'label'   => 'V-05b · Proyectos: Vigencia x Dependencia (Agrupadas)',
-                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
-                                SELECT
-                                    {$vigencia_norm} AS label,
-                                    p.dependencia_proyecto AS series,
-                                    COUNT(*) AS value
-                                FROM {$this->table('proyectos')} p
-                                WHERE p.dependencia_proyecto != ''
-                                GROUP BY label, p.dependencia_proyecto
-                              ) sub",
-                'columns' => [ 'label', 'series', 'value' ],
-            ],
-
-            // =====================================================================
-            // VISTAS DE CONTRATOS: SCATTER, BOX Y RIESGO (V-07, V-08, V-19)
-            // =====================================================================
-
-            'scatter_valor_avance' => [
-                'label'   => 'V-08 · Scatter: Valor Contrato vs Avance Físico',
-                // x = valor, y = avance, series = dependencia, label = numero.
                 'sql'     => "SELECT
-                                c.numero_contrato AS label,
+                                SUBSTRING(p.numero_proyecto, 1, 4) AS label,
                                 p.dependencia_proyecto AS series,
-                                c.valor_contrato AS x,
-                                c.porcentaje_avance_fisico AS y,
-                                c.valor_contrato AS value
-                              FROM {$this->table('contratos')} c
-                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
-                              WHERE c.valor_contrato > 0
-                                AND p.dependencia_proyecto != ''",
-                'columns' => [ 'label', 'series', 'x', 'y', 'value' ],
-            ],
-
-            'avance_por_entidad' => [
-                'label'   => 'V-19 · Avance Físico por Entidad Ejecutora (Distribución)',
-                'sql'     => "SELECT
-                                {$entidad_norm} AS label,
-                                {$entidad_norm} AS series,
-                                c.porcentaje_avance_fisico AS value,
-                                c.numero_contrato AS detalle,
-                                c.valor_contrato AS total_valor
-                              FROM {$this->table('contratos')} c
-                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
-                              WHERE c.porcentaje_avance_fisico IS NOT NULL",
-                'columns' => [ 'label', 'series', 'value', 'detalle', 'total_valor' ],
-            ],
-
-            'avance_por_dependencia_promedio' => [
-                'label'   => 'V-07b · Avance Físico Promedio por Dependencia',
-                'sql'     => "SELECT
-                                p.dependencia_proyecto AS label,
-                                ROUND(AVG(c.porcentaje_avance_fisico), 2) AS value,
-                                COUNT(c.id) AS count
-                              FROM {$this->table('contratos')} c
-                              INNER JOIN {$this->table('proyectos')} p ON c.proyecto_id = p.id
+                                COUNT(*) AS value
+                              FROM {$this->table('proyectos')} p
                               WHERE p.dependencia_proyecto != ''
-                              GROUP BY p.dependencia_proyecto",
-                'columns' => [ 'label', 'value', 'count' ],
-            ],
-
-            'distribucion_riesgo_contratos' => [
-                'label'   => 'V-08b · Distribución de Riesgo de Contratos (Pie/Donut)',
-                // Criterios: bajo = avance >= 50%, medio = 10-49%, alto = < 10% con valor alto.
-                'sql'     => "SELECT
-                                CASE
-                                    WHEN c.porcentaje_avance_fisico >= 50 THEN 'Riesgo bajo'
-                                    WHEN c.porcentaje_avance_fisico >= 10 THEN 'Riesgo medio'
-                                    ELSE 'Riesgo alto'
-                                END AS label,
-                                COUNT(*) AS value,
-                                SUM(c.valor_contrato) AS total_valor
-                              FROM {$this->table('contratos')} c
-                              WHERE c.valor_contrato > 0
-                              GROUP BY label",
-                'columns' => [ 'label', 'value', 'total_valor' ],
-            ],
-
-            // =====================================================================
-            // RANKING TEMPORAL (V-15, inspirado en BumpChart)
-            // =====================================================================
-
-            'ranking_dependencias_vigencia' => [
-                'label'   => 'V-15 · Ranking de Dependencias por Vigencia',
-                // Sólo vigencias reales (prefijo BPIN año) — los BPIN SGR
-                // que empiezan con 52xxx no se consideran vigencia.
-                'sql'     => "SELECT sub.label, sub.series, sub.value FROM (
-                                SELECT
-                                    SUBSTRING(p.numero_proyecto, 1, 4) AS label,
-                                    p.dependencia_proyecto AS series,
-                                    COUNT(*) AS value
-                                FROM {$this->table('proyectos')} p
-                                WHERE p.dependencia_proyecto != ''
-                                  AND p.numero_proyecto REGEXP '^(20|19)[0-9]{2}'
-                                GROUP BY SUBSTRING(p.numero_proyecto, 1, 4), p.dependencia_proyecto
-                              ) sub",
+                                AND p.numero_proyecto REGEXP '^(20|19)[0-9]{2}'
+                              GROUP BY SUBSTRING(p.numero_proyecto, 1, 4), p.dependencia_proyecto",
                 'columns' => [ 'label', 'series', 'value' ],
             ],
 
@@ -994,13 +859,7 @@ class SGR_Suite_Database {
             ],
 
             // =====================================================================
-            // VISTAS DE GEOMAP (V-12, V-13)
-            //
-            // Estas vistas retornan filas CRUDAS (una por registro en la tabla
-            // municipios). La agregación a nivel DIVIPOLA la ejecuta el
-            // post-procesador en execute_chart_view() usando el normalizador
-            // (class-municipios-normalizer.php) contra el lookup canónico de
-            // los 64 municipios de Nariño.
+            // GEOGRÁFICO (V-12, V-13)
             // =====================================================================
 
             'geomap_valor_municipio' => [
