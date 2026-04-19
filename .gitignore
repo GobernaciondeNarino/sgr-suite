@@ -18,6 +18,7 @@ Thumbs.db
 # Dependencies
 node_modules/
 vendor/
+!la-mejor-taza/assets/vendor/
 
 # Build
 *.map
