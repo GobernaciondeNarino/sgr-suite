@@ -1071,12 +1071,41 @@ class SGR_Suite_Database {
             $out[] = $entry;
         }
 
-        // v2.5.6: NO pre-rellenar municipios sin datos. El topojson
-        // dibuja los 64 polígonos, pero sólo los que tienen data real
-        // reciben color del colorScale y tooltip. Los demás se pintan
-        // con el fill por defecto (#FFFCF3 — configurado en JS). Esto
-        // evita confusión con tooltips "sin datos" y hace que d3plus use
-        // su tooltip nativo sin interferencia.
+        // v2.5.9: pre-rellenamos los 64 municipios de Nariño con `value=null`
+        // cuando no tienen contratos en la vigencia. Esto garantiza que el
+        // tooltip nativo de d3plus-geomap dispare en TODOS los polígonos
+        // (sin pre-fill solo dispara en los matched, y el hover queda
+        // intermitente). Las filas con value=null no entran al dominio del
+        // colorScale: d3plus mantiene el fill base (#FFFCF3) en los
+        // polígonos sin datos.
+        $all_munis = [];
+        if ( class_exists( 'SGR_Suite_Municipios_Normalizer' ) ) {
+            $all_munis = SGR_Suite_Municipios_Normalizer::all();
+        }
+        if ( ! empty( $all_munis ) ) {
+            $present = [];
+            foreach ( $out as $row ) {
+                if ( ! empty( $row['id'] ) ) {
+                    $present[ (string) $row['id'] ] = true;
+                }
+            }
+            foreach ( $all_munis as $muni ) {
+                $divipola = (string) ( $muni['divipola'] ?? '' );
+                if ( '' === $divipola || isset( $present[ $divipola ] ) ) {
+                    continue;
+                }
+                $out[] = [
+                    'id'              => $divipola,
+                    'label'           => (string) ( $muni['nombre'] ?? $divipola ),
+                    'value'           => null,
+                    'valor_total'     => 0,
+                    'contratos'       => 0,
+                    'poblacion'       => 0,
+                    'avance_promedio' => 0,
+                    'dependencias'    => [],
+                ];
+            }
+        }
 
         // Ordenar por value.
         usort(
@@ -1094,7 +1123,9 @@ class SGR_Suite_Database {
             }
         );
 
-        $hard_cap = max( 1, min( $limit, 64 ) );
-        return array_slice( $out, 0, $hard_cap );
+        // El geomap necesita los 64 municipios siempre (los matched para el
+        // colorScale, los nulos para activar tooltip en zonas sin datos).
+        // El $limit del usuario aquí no aplica: el mapa no se "trunca".
+        return array_slice( $out, 0, 64 );
     }
 }
