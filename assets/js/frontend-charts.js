@@ -767,14 +767,25 @@
                         break;
 
                     case 'geomap':
-                        // Geomap Nariño: requiere topojson local + data con
-                        // columna `id` = DIVIPOLA (la agregación la hace PHP).
+                        // Geomap Nariño — reescrito siguiendo el ejemplo
+                        // oficial de d3plus-geomap:
+                        //   https://d3plus.org/?path=/docs/core-charts-geomap--d3plus
                         //
-                        // Preparación del topojson: cada geometría tiene ya
-                        // feature.id = DIVIPOLA (normalizado offline), así que
-                        // podemos usar la configuración por defecto de
-                        // d3plus-geomap sin topojsonId/topojsonFilter (evitando
-                        // bugs de short-circuit y diferencias entre versiones).
+                        // Cadena mínima estable:
+                        //   new Geomap()
+                        //     .topojson(url)
+                        //     .topojsonId("id")     // accessor join
+                        //     .data([{id, value, ...}])
+                        //     .groupBy("id")
+                        //     .colorScale("value")
+                        //     .render()
+                        //
+                        // El topojson local (`data/topo/narino_municipios.topojson`)
+                        // tiene un único objeto `municipios`, cada geometría
+                        // expone `feature.id = DIVIPOLA` (string). La data se
+                        // agrega en PHP (geomap_aggregate) y siempre llega
+                        // con `id` (DIVIPOLA), `label`, `value` y métricas
+                        // auxiliares para el tooltip.
                         if (!d3p.Geomap) {
                             this.showError(uid, 'Geomap no disponible en esta versión de D3plus.');
                             return;
@@ -787,33 +798,56 @@
                             return;
                         }
 
-                        // Asegurar que data[i].id sea string (los IDs del
-                        // topojson son strings; un int no hace match).
-                        data.forEach(function (d) {
-                            if (d && d.id != null) {
-                                d.id = String(d.id);
-                            }
+                        // El topojson serializa los IDs como string; los
+                        // datos de PHP pueden venir como int. Normalizamos
+                        // para que el join groupBy ↔ topojsonId sea exacto.
+                        var geomapData = data.filter(function (d) {
+                            return d && d.id != null && String(d.id) !== '';
+                        }).map(function (d) {
+                            d.id = String(d.id);
+                            return d;
                         });
 
-                        // Paleta secuencial por defecto (sin #FFFCF3 — los
-                        // municipios sin datos no se incluyen en la data,
-                        // se pintan con el fill por defecto más abajo).
                         var geomapPalette = (config.colors && config.colors.length >= 3)
                             ? config.colors
-                            : ['#bfdbfe', '#60a5fa', '#2563eb', '#1e3a8a'];
+                            : ['#e0f2fe', '#7dd3fc', '#0284c7', '#0c4a6e'];
 
-                        // Construcción defensiva: algunos métodos (fitFilter,
-                        // topojsonId, ocean, tiles) pueden no estar expuestos
-                        // en todas las variantes del bundle. Se aplican con
-                        // detección de tipo para no romper la cadena.
-                        // v2.5.6: sólo se pasan filas con datos reales.
-                        // Los polígonos sin data reciben fill #FFFCF3 vía
-                        // shapeConfig. El tooltip nativo de d3plus sólo
-                        // dispara en features con data-match — así no hay
-                        // confusión con "sin contratos".
+                        var geomapMetric = (config.data_view && config.data_view.indexOf('contratos') !== -1)
+                            ? 'Contratos'
+                            : 'Valor';
+
+                        // Índice rápido por DIVIPOLA para resolver el
+                        // tooltip cuando d3plus pasa el feature topojson
+                        // (no la fila de data) — pasa con frecuencia para
+                        // municipios sin datos o cuando el hover toca el
+                        // path antes del merge interno.
+                        var geomapIndex = {};
+                        geomapData.forEach(function (d) {
+                            geomapIndex[d.id] = d;
+                        });
+
+                        function resolveGeomapDatum(d) {
+                            if (!d) { return null; }
+                            // Caso 1: d3plus ya nos pasa la fila mergeada.
+                            if (d.value != null || d.label != null) {
+                                return d;
+                            }
+                            // Caso 2: d3plus pasa el feature topojson; el id
+                            // está en d.id o en d.properties.id.
+                            var fid = d.id != null
+                                ? String(d.id)
+                                : (d.properties && d.properties.id ? String(d.properties.id) : '');
+                            if (fid && geomapIndex[fid]) {
+                                return geomapIndex[fid];
+                            }
+                            // Sin match: devolvemos las properties del
+                            // feature para al menos mostrar el nombre.
+                            return d.properties || d;
+                        }
+
                         chart = new d3p.Geomap()
                             .select(selector)
-                            .data(data)
+                            .data(geomapData)
                             .groupBy('id')
                             .colorScale('value')
                             .colorScaleConfig({
@@ -825,54 +859,59 @@
                                 }
                             })
                             .colorScalePosition('bottom')
+                            .topojson(topoUrl)
+                            .topojsonId('id')
+                            .topojsonKey('municipios')
+                            .ocean('transparent')
+                            .tiles(false)
+                            .shapeConfig({
+                                Path: {
+                                    fill: function (d) {
+                                        var row = resolveGeomapDatum(d);
+                                        if (row && row.value != null) {
+                                            // colorScale aplica el color real;
+                                            // devolver undefined deja que
+                                            // d3plus lo resuelva.
+                                            return undefined;
+                                        }
+                                        return '#FFFCF3';
+                                    },
+                                    stroke: '#1e3a8a',
+                                    strokeWidth: 0.4
+                                }
+                            })
                             .tooltipConfig({
                                 title: function (d) {
-                                    return d && d.label ? String(d.label) : '';
+                                    var row = resolveGeomapDatum(d);
+                                    if (!row) { return ''; }
+                                    return row.label || row.nombre || row.id || '';
                                 },
                                 body: function (d) {
-                                    if (!d) return '';
-                                    var metric  = (config.data_view && config.data_view.indexOf('contratos') !== -1)
-                                        ? 'Contratos'
-                                        : 'Valor';
+                                    var row = resolveGeomapDatum(d);
+                                    if (!row) { return ''; }
+                                    if (row.value == null) {
+                                        return '<em>Sin ' + geomapMetric.toLowerCase() + ' en esta vigencia</em>';
+                                    }
                                     var lines = [];
-                                    if (d.value != null) {
-                                        lines.push('<strong>' + metric + ':</strong> ' + formatNumber(d.value, numFormat));
+                                    lines.push('<strong>' + geomapMetric + ':</strong> ' + formatNumber(row.value, numFormat));
+                                    if (row.contratos != null && geomapMetric !== 'Contratos') {
+                                        lines.push('<strong>Contratos:</strong> ' + row.contratos);
                                     }
-                                    if (d.contratos != null && metric !== 'Contratos') {
-                                        lines.push('<strong>Contratos:</strong> ' + d.contratos);
+                                    if (row.valor_total != null && geomapMetric === 'Contratos') {
+                                        lines.push('<strong>Valor total:</strong> ' + formatNumber(row.valor_total, numFormat));
                                     }
-                                    if (d.valor_total != null && metric === 'Contratos') {
-                                        lines.push('<strong>Valor total:</strong> ' + formatNumber(d.valor_total, numFormat));
+                                    if (row.poblacion != null && row.poblacion > 0) {
+                                        lines.push('<strong>Población:</strong> ' + formatNumber(row.poblacion, 'colombiano'));
                                     }
-                                    if (d.poblacion != null && d.poblacion > 0) {
-                                        lines.push('<strong>Población:</strong> ' + formatNumber(d.poblacion, 'colombiano'));
+                                    if (row.avance_promedio != null && row.avance_promedio > 0) {
+                                        lines.push('<strong>Avance:</strong> ' + row.avance_promedio + '%');
                                     }
-                                    if (d.avance_promedio != null && d.avance_promedio > 0) {
-                                        lines.push('<strong>Avance:</strong> ' + d.avance_promedio + '%');
-                                    }
-                                    if (d.dependencias && d.dependencias.length) {
-                                        lines.push('<strong>Dep.:</strong> ' + d.dependencias.join(', '));
+                                    if (row.dependencias && row.dependencias.length) {
+                                        lines.push('<strong>Dep.:</strong> ' + row.dependencias.join(', '));
                                     }
                                     return lines.join('<br/>');
                                 }
-                            })
-                            .topojson(topoUrl);
-
-                        if (typeof chart.topojsonId === 'function') {
-                            chart.topojsonId('id');
-                        }
-                        if (typeof chart.tiles === 'function') {
-                            chart.tiles(true);
-                        }
-                        if (typeof chart.ocean === 'function') {
-                            chart.ocean('transparent');
-                        }
-                        if (typeof chart.fitFilter === 'function') {
-                            chart.fitFilter(function (d) {
-                                var fid = d && d.id != null ? String(d.id) : '';
-                                return fid.length === 5 && fid.substring(0, 2) === '52';
                             });
-                        }
                         break;
 
                     default:

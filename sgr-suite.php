@@ -3,7 +3,7 @@
  * Plugin Name: SGR Suite
  * Plugin URI:  https://github.com/GobernaciondeNarino/sgr-suite
  * Description: Importa, almacena, visualiza y filtra datos de proyectos del Sistema General de Regalías (SGR) de Nariño. Incluye gráficos D3Plus y personalización de cards.
- * Version:     2.5.8
+ * Version:     2.5.9
  * Requires at least: 6.0
  * Requires PHP: 8.1
  * Author:      Gobernación de Nariño
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SGR_SUITE_VERSION', '2.5.8' );
+define( 'SGR_SUITE_VERSION', '2.5.9' );
 define( 'SGR_SUITE_FILE', __FILE__ );
 define( 'SGR_SUITE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'SGR_SUITE_URL', plugin_dir_url( __FILE__ ) );
@@ -169,7 +169,6 @@ final class SGR_Suite {
         );
 
         $subpages = [
-            [ 'sgr-suite', 'Dashboard', 'Dashboard', 'render_admin_dashboard' ],
             [ 'sgr-suite-import', 'Importar Datos', 'Importar Datos', 'render_admin_import' ],
             [ 'sgr-suite-records', 'Proyectos', 'Proyectos', 'render_admin_records' ],
             [ 'sgr-suite-logs', 'Registros', 'Registros', 'render_admin_logs' ],
@@ -178,6 +177,11 @@ final class SGR_Suite {
         foreach ( $subpages as $sp ) {
             add_submenu_page( 'sgr-suite', esc_html__( $sp[1], 'sgr-suite' ), esc_html__( $sp[2], 'sgr-suite' ), 'manage_options', $sp[0], [ $this, $sp[3] ] );
         }
+
+        // El clic en el menú raíz "SGR Suite" abre directamente el dashboard;
+        // WordPress autogenera un primer submenú que duplica el padre, así que
+        // se elimina para no mostrar un enlace "Dashboard" redundante.
+        remove_submenu_page( 'sgr-suite', 'sgr-suite' );
     }
 
     public function enqueue_admin_assets( string $hook ): void {
