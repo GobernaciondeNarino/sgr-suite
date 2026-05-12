@@ -767,25 +767,34 @@
                         break;
 
                     case 'geomap':
-                        // Geomap Nariño — reescrito siguiendo el ejemplo
+                        // Geomap Nariño — implementación alineada al ejemplo
                         // oficial de d3plus-geomap:
                         //   https://d3plus.org/?path=/docs/core-charts-geomap--d3plus
                         //
-                        // Cadena mínima estable:
+                        // Cadena mínima:
                         //   new Geomap()
                         //     .topojson(url)
-                        //     .topojsonId("id")     // accessor join
-                        //     .data([{id, value, ...}])
+                        //     .topojsonId("id")     // accessor del join
+                        //     .topojsonKey("municipios")
+                        //     .data([{id, value, ...}])  // los 64 municipios
                         //     .groupBy("id")
                         //     .colorScale("value")
                         //     .render()
                         //
                         // El topojson local (`data/topo/narino_municipios.topojson`)
-                        // tiene un único objeto `municipios`, cada geometría
+                        // tiene un único objeto `municipios`, y cada geometría
                         // expone `feature.id = DIVIPOLA` (string). La data se
-                        // agrega en PHP (geomap_aggregate) y siempre llega
-                        // con `id` (DIVIPOLA), `label`, `value` y métricas
-                        // auxiliares para el tooltip.
+                        // agrega en PHP (geomap_aggregate) y desde v2.5.9 SIEMPRE
+                        // trae los 64 municipios: los matched con value numérico,
+                        // los sin contratos con value=null. Esto permite que
+                        // d3plus dispare tooltip en todos los polígonos.
+                        //
+                        // IMPORTANTE: shapeConfig.Path.fill DEBE ser un string
+                        // estático. Si se pasa una función, d3plus la usa como
+                        // autoridad final y bypassa el colorScale → todo el
+                        // mapa queda del color devuelto (o negro si null).
+                        // Con fill estático, colorScale colorea los matched y
+                        // el fill base se mantiene en los nulos.
                         if (!d3p.Geomap) {
                             this.showError(uid, 'Geomap no disponible en esta versión de D3plus.');
                             return;
@@ -798,9 +807,8 @@
                             return;
                         }
 
-                        // El topojson serializa los IDs como string; los
-                        // datos de PHP pueden venir como int. Normalizamos
-                        // para que el join groupBy ↔ topojsonId sea exacto.
+                        // Normalizar id a string (topojson siempre serializa
+                        // los ids como string).
                         var geomapData = data.filter(function (d) {
                             return d && d.id != null && String(d.id) !== '';
                         }).map(function (d) {
@@ -815,35 +823,6 @@
                         var geomapMetric = (config.data_view && config.data_view.indexOf('contratos') !== -1)
                             ? 'Contratos'
                             : 'Valor';
-
-                        // Índice rápido por DIVIPOLA para resolver el
-                        // tooltip cuando d3plus pasa el feature topojson
-                        // (no la fila de data) — pasa con frecuencia para
-                        // municipios sin datos o cuando el hover toca el
-                        // path antes del merge interno.
-                        var geomapIndex = {};
-                        geomapData.forEach(function (d) {
-                            geomapIndex[d.id] = d;
-                        });
-
-                        function resolveGeomapDatum(d) {
-                            if (!d) { return null; }
-                            // Caso 1: d3plus ya nos pasa la fila mergeada.
-                            if (d.value != null || d.label != null) {
-                                return d;
-                            }
-                            // Caso 2: d3plus pasa el feature topojson; el id
-                            // está en d.id o en d.properties.id.
-                            var fid = d.id != null
-                                ? String(d.id)
-                                : (d.properties && d.properties.id ? String(d.properties.id) : '');
-                            if (fid && geomapIndex[fid]) {
-                                return geomapIndex[fid];
-                            }
-                            // Sin match: devolvemos las properties del
-                            // feature para al menos mostrar el nombre.
-                            return d.properties || d;
-                        }
 
                         chart = new d3p.Geomap()
                             .select(selector)
@@ -866,48 +845,37 @@
                             .tiles(false)
                             .shapeConfig({
                                 Path: {
-                                    fill: function (d) {
-                                        var row = resolveGeomapDatum(d);
-                                        if (row && row.value != null) {
-                                            // colorScale aplica el color real;
-                                            // devolver undefined deja que
-                                            // d3plus lo resuelva.
-                                            return undefined;
-                                        }
-                                        return '#FFFCF3';
-                                    },
+                                    fill: '#FFFCF3',
                                     stroke: '#1e3a8a',
                                     strokeWidth: 0.4
                                 }
                             })
                             .tooltipConfig({
                                 title: function (d) {
-                                    var row = resolveGeomapDatum(d);
-                                    if (!row) { return ''; }
-                                    return row.label || row.nombre || row.id || '';
+                                    if (!d) { return ''; }
+                                    return d.label || d.nombre || d.id || '';
                                 },
                                 body: function (d) {
-                                    var row = resolveGeomapDatum(d);
-                                    if (!row) { return ''; }
-                                    if (row.value == null) {
+                                    if (!d) { return ''; }
+                                    if (d.value == null) {
                                         return '<em>Sin ' + geomapMetric.toLowerCase() + ' en esta vigencia</em>';
                                     }
                                     var lines = [];
-                                    lines.push('<strong>' + geomapMetric + ':</strong> ' + formatNumber(row.value, numFormat));
-                                    if (row.contratos != null && geomapMetric !== 'Contratos') {
-                                        lines.push('<strong>Contratos:</strong> ' + row.contratos);
+                                    lines.push('<strong>' + geomapMetric + ':</strong> ' + formatNumber(d.value, numFormat));
+                                    if (d.contratos != null && geomapMetric !== 'Contratos') {
+                                        lines.push('<strong>Contratos:</strong> ' + d.contratos);
                                     }
-                                    if (row.valor_total != null && geomapMetric === 'Contratos') {
-                                        lines.push('<strong>Valor total:</strong> ' + formatNumber(row.valor_total, numFormat));
+                                    if (d.valor_total != null && geomapMetric === 'Contratos') {
+                                        lines.push('<strong>Valor total:</strong> ' + formatNumber(d.valor_total, numFormat));
                                     }
-                                    if (row.poblacion != null && row.poblacion > 0) {
-                                        lines.push('<strong>Población:</strong> ' + formatNumber(row.poblacion, 'colombiano'));
+                                    if (d.poblacion != null && d.poblacion > 0) {
+                                        lines.push('<strong>Población:</strong> ' + formatNumber(d.poblacion, 'colombiano'));
                                     }
-                                    if (row.avance_promedio != null && row.avance_promedio > 0) {
-                                        lines.push('<strong>Avance:</strong> ' + row.avance_promedio + '%');
+                                    if (d.avance_promedio != null && d.avance_promedio > 0) {
+                                        lines.push('<strong>Avance:</strong> ' + d.avance_promedio + '%');
                                     }
-                                    if (row.dependencias && row.dependencias.length) {
-                                        lines.push('<strong>Dep.:</strong> ' + row.dependencias.join(', '));
+                                    if (d.dependencias && d.dependencias.length) {
+                                        lines.push('<strong>Dep.:</strong> ' + d.dependencias.join(', '));
                                     }
                                     return lines.join('<br/>');
                                 }
